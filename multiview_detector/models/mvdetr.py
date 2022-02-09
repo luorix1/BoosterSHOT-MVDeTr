@@ -73,7 +73,7 @@ def create_reference_map(dataset, n_points=4, downsample=2, visualize=False):
 
 class MVDeTr(nn.Module):
     def __init__(self, dataset, arch='resnet18', z=0, world_feat_arch='conv',
-                 bottleneck_dim=128, outfeat_dim=64, droupout=0.5):
+                 bottleneck_dim=128, outfeat_dim=64, dropout=0.5):
         super().__init__()
         self.Rimg_shape, self.Rworld_shape = dataset.Rimg_shape, dataset.Rworld_shape
         self.img_reduce = dataset.img_reduce
@@ -107,7 +107,7 @@ class MVDeTr(nn.Module):
             raise Exception('architecture currently support [vgg11, resnet18]')
 
         if bottleneck_dim:
-            self.bottleneck = nn.Sequential(nn.Conv2d(base_dim, bottleneck_dim, 1), nn.Dropout2d(droupout))
+            self.bottleneck = nn.Sequential(nn.Conv2d(base_dim, bottleneck_dim, 1), nn.Dropout2d(dropout))
             base_dim = bottleneck_dim
         else:
             self.bottleneck = nn.Identity()
