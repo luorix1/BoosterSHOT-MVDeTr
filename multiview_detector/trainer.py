@@ -92,7 +92,7 @@ class PerspectiveTrainer(BaseTrainer):
                 t1 = time.time()
                 t_epoch = t1 - t0
                 print(f'Train Epoch: {epoch}, Batch:{(batch_idx + 1)}, loss: {losses / (batch_idx + 1):.6f}, '
-                      f'Time: {t_epoch:.1f}, maxima: {world_heatmap.max():.3f}')
+                      f'LR: {optimizer.param_groups[0]["lr"]}, Time: {t_epoch:.1f}, maxima: {world_heatmap.max():.3f}')
                 pass
         return losses / len(dataloader)
 
