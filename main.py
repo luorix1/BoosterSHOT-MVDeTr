@@ -15,6 +15,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from multiview_detector.datasets import *
 from multiview_detector.models.mvdetr import MVDeTr
+from multiview_detector.models.abcdet import ABCDet
 from multiview_detector.utils.logger import Logger
 from multiview_detector.utils.draw_curve import draw_curve
 from multiview_detector.utils.str2bool import str2bool
@@ -49,9 +50,9 @@ def main(args):
 
     # dataset
     if 'wildtrack' in args.dataset:
-        base = Wildtrack(os.path.expanduser('~/Data/Wildtrack'))
+        base = Wildtrack(os.path.expanduser('/workspace/Data/Wildtrack'))
     elif 'multiviewx' in args.dataset:
-        base = MultiviewX(os.path.expanduser('~/Data/MultiviewX'))
+        base = MultiviewX(os.path.expanduser('/workspace/Data/MultiviewX'))
     else:
         raise Exception('must choose from [wildtrack, multiviewx]')
     train_set = frameDataset(base, train=True, world_reduce=args.world_reduce,
@@ -81,6 +82,10 @@ def main(args):
                  f'worldRK{args.world_reduce}_{args.world_kernel_size}_imgRK{args.img_reduce}_{args.img_kernel_size}_' \
                  f'{datetime.datetime.today():%Y-%m-%d_%H-%M-%S}'
         os.makedirs(logdir, exist_ok=True)
+        os.makedirs(os.path.join(logdir, 'imgs'), exist_ok=True)
+        if args.model == 'ABCDet':
+            for i in range(args.depth_scales):
+                os.makedirs(os.path.join(logdir, f'imgs/{i+1}'), exist_ok=True)
         copy_tree('./multiview_detector', logdir + '/scripts/multiview_detector')
         for script in os.listdir('.'):
             if script.split('.')[-1] == 'py':
@@ -94,8 +99,14 @@ def main(args):
     print(vars(args))
 
     # model
-    model = MVDeTr(train_set, args.arch, world_feat_arch=args.world_feat,
-                   bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout).cuda()
+    if args.model == 'MVDeTr':
+        model = MVDeTr(train_set, args.arch, world_feat_arch=args.world_feat,
+                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout).cuda()
+    elif args.model == 'ABCDet':
+        model = ABCDet(train_set, args.arch, world_feat_arch=args.world_feat,
+                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
+    else:
+        raise Exception('The selected model is not supported.')
 
     param_dicts = [{"params": [p for n, p in model.named_parameters() if 'base' not in n and p.requires_grad], },
                    {"params": [p for n, p in model.named_parameters() if 'base' in n and p.requires_grad],
@@ -116,7 +127,7 @@ def main(args):
     # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [10, 15], 0.1)
     # scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, warmup_lr_scheduler)
 
-    trainer = PerspectiveTrainer(model, logdir, args.cls_thres, args.alpha, args.use_mse, args.id_ratio)
+    trainer = PerspectiveTrainer(model, logdir, args.cls_thres, args.alpha, args.use_mse, args.id_ratio, args.visualize)
 
     # draw curve
     x_epoch = []
@@ -162,6 +173,8 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--batch_size', type=int, default=1, help='input batch size for training')
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument('--dropcam', type=float, default=0.0)
+    parser.add_argument('--model', type=str, default='MVDeTr', choices=['MVDeTr', 'ABCDet'])
+    parser.add_argument('--depth_scales', type=int, default=4)
     parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train')
     parser.add_argument('--lr', type=float, default=5e-4, help='learning rate')
     parser.add_argument('--base_lr_ratio', type=float, default=0.1)

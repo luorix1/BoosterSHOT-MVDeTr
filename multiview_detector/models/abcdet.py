@@ -5,13 +5,13 @@ import torch.nn as nn
 from torchvision.models import vgg11
 import torchvision.transforms as T
 import kornia
+import matplotlib.pyplot as plt
+
 from multiview_detector.models.resnet import resnet18
 from multiview_detector.utils.image_utils import img_color_denormalize, array2heatmap
 from multiview_detector.utils.projection import get_worldcoord_from_imgcoord_mat, project_2d_points
 from multiview_detector.models.conv_world_feat import ConvWorldFeat, DeformConvWorldFeat
-from multiview_detector.models.trans_world_feat import TransformerWorldFeat, DeformTransWorldFeat, \
-    DeformTransWorldFeat_aio
-import matplotlib.pyplot as plt
+from multiview_detector.models.trans_world_feat import TransformerWorldFeat, DeformTransWorldFeat
 
 
 def fill_fc_weights(layers):
@@ -64,19 +64,20 @@ def create_reference_map(dataset, n_points=4, downsample=2, visualize=False):
             ax.streamplot(ref_x.numpy(), ref_y.numpy(), field_x.numpy(), field_y.numpy())
             ax.set_aspect('equal', 'box')
             ax.invert_yaxis()
-            plt.show()
+            # plt.show()
 
     ref_maps[:, :, :, 0] /= W
     ref_maps[:, :, :, 1] /= H
     return ref_maps
 
 
-class MVDeTr(nn.Module):
-    def __init__(self, dataset, arch='resnet18', z=0, world_feat_arch='conv',
-                 bottleneck_dim=128, outfeat_dim=64, dropout=0.5):
+class ABCDet(nn.Module):
+    def __init__(self, dataset, arch='resnet18', world_feat_arch='conv',
+                 bottleneck_dim=128, outfeat_dim=64, dropout=0.5, depth_scales=4):
         super().__init__()
         self.Rimg_shape, self.Rworld_shape = dataset.Rimg_shape, dataset.Rworld_shape
         self.img_reduce = dataset.img_reduce
+        self.depth_scales = depth_scales
 
         # world grid change to xy indexing
         world_zoom_mat = np.diag([dataset.world_reduce, dataset.world_reduce, 1])
@@ -85,15 +86,25 @@ class MVDeTr(nn.Module):
 
         # z in meters by default
         # projection matrices: img feat -> world feat
-        worldcoord_from_imgcoord_mats = [get_worldcoord_from_imgcoord_mat(dataset.base.intrinsic_matrices[cam],
+        worldcoord_from_imgcoord_mats = [np.array([get_worldcoord_from_imgcoord_mat(dataset.base.intrinsic_matrices[cam],
                                                                           dataset.base.extrinsic_matrices[cam],
-                                                                          z / dataset.base.worldcoord_unit)
-                                         for cam in range(dataset.num_cam)]
+                                                                          dataset.base.depth_margin * i)
+                                         for cam in range(dataset.num_cam)]) for i in range(self.depth_scales)]
 
         # Rworldgrid(xy)_from_imgcoord(xy)
-        self.proj_mats = torch.stack([torch.from_numpy(Rworldgrid_from_worldcoord_mat @
-                                                       worldcoord_from_imgcoord_mats[cam])
-                                      for cam in range(dataset.num_cam)])
+        proj_mats = {}
+        
+        for i in range(self.depth_scales):
+            proj_mats[i] = [torch.from_numpy(Rworldgrid_from_worldcoord_mat @ worldcoord_from_imgcoord_mats[i][j]) for j in range(dataset.num_cam)]
+
+        B = 1
+        for i in range(self.depth_scales):
+            proj = torch.stack(proj_mats[i]).float()[
+                None].repeat([B, 1, 1, 1])
+            proj_mats[i] = nn.Parameter(
+                proj.view([-1, 3, 3]), requires_grad=False).cuda()
+        
+        self.proj_mats = proj_mats
 
         if arch == 'vgg11':
             self.base = vgg11(pretrained=True).features
@@ -131,10 +142,9 @@ class MVDeTr(nn.Module):
             reference_points = create_reference_map(dataset, n_points).repeat([dataset.num_cam, 1, 1, 1])
             self.world_feat = DeformTransWorldFeat(dataset.num_cam, dataset.Rworld_shape, base_dim,
                                                    n_points=n_points, stride=2, reference_points=reference_points)
-        elif world_feat_arch == 'aio':
-            self.world_feat = DeformTransWorldFeat_aio(dataset.num_cam, dataset.Rworld_shape, base_dim)
         else:
             raise Exception
+        self.depth_classifier = output_head(base_dim, outfeat_dim, self.depth_scales)
 
         # world heads
         self.world_heatmap = output_head(base_dim, outfeat_dim, 1)
@@ -149,10 +159,23 @@ class MVDeTr(nn.Module):
         fill_fc_weights(self.world_offset)
         pass
 
+    def warp_perspective(self, img_feature_all, proj_mats):
+        warped_feat = 0
+        depth_select = self.depth_classifier(
+            img_feature_all).softmax(dim=1)  # [b*n,d,h,w]
+
+        for i in range(self.depth_scales):
+            in_feat = img_feature_all * depth_select[:, i][:, None]
+            out_feat = kornia.warp_perspective(
+                in_feat, proj_mats[i], self.Rworld_shape)
+            # [b*n,c,h,w]
+            warped_feat += out_feat
+        return warped_feat
+
     def forward(self, imgs, M, logdir=None, visualize=False):
         if visualize:
             assert logdir is not None
-            
+
         B, N, C, H, W = imgs.shape
         imgs = imgs.view(B * N, C, H, W)
 
@@ -162,21 +185,22 @@ class MVDeTr(nn.Module):
                                      torch.from_numpy(np.diag([self.img_reduce, self.img_reduce, 1])
                                                       ).view(1, 3, 3).repeat(B * N, 1, 1).float()
         # Rworldgrid(xy)_from_Rimggrid(xy)
-        proj_mats = self.proj_mats.repeat(B, 1, 1, 1).view(B * N, 3, 3).float() @ imgcoord_from_Rimggrid_mat
+        proj_mats = [self.proj_mats[i].repeat(B, 1, 1, 1).view(B * N, 3, 3).float() @ imgcoord_from_Rimggrid_mat.cuda() for i in range(self.depth_scales)]
 
         if visualize:
             denorm = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-            proj_imgs = kornia.warp_perspective(T.Resize(self.Rimg_shape)(imgs), proj_mats.to(imgs.device),
-                                                self.Rworld_shape). \
-                view(B, N, 3, self.Rworld_shape[0], self.Rworld_shape[1])
             for cam in range(N):
-                visualize_img = T.ToPILImage()(denorm(imgs.detach())[cam * B])
-                visualize_img.save(os.path.join(logdir, f'imgs/augimg{cam + 1}.png'))
-                plt.imshow(visualize_img)
-                plt.show()
-                visualize_img = T.ToPILImage()(denorm(proj_imgs.detach())[0, cam])
-                plt.imshow(visualize_img)
-                plt.show()
+                    visualize_img = T.ToPILImage()(denorm(imgs.detach())[cam * B])
+                    visualize_img.save(os.path.join(logdir, f'imgs/augimg{cam + 1}.png'))
+                    # plt.imshow(visualize_img)
+                    # plt.show()
+            for i in range(self.depth_scales):
+                proj_imgs = kornia.warp_perspective(T.Resize(self.Rimg_shape)(imgs), proj_mats[i], self.Rworld_shape).view(B, N, 3, self.Rworld_shape[0], self.Rworld_shape[1])
+                for cam in range(N):
+                    visualize_img = T.ToPILImage()(denorm(proj_imgs.detach())[0, cam])
+                    visualize_img.save(os.path.join(logdir, f'imgs/{i+1}/augimgproj{cam + 1}.png'))
+                    # plt.imshow(visualize_img)
+                    # plt.show()
 
         imgs_feat = self.base(imgs)
         imgs_feat = self.bottleneck(imgs_feat)
@@ -184,8 +208,8 @@ class MVDeTr(nn.Module):
             for cam in range(N):
                 visualize_img = array2heatmap(torch.norm(imgs_feat[cam * B].detach(), dim=0).cpu())
                 visualize_img.save(os.path.join(logdir, f'imgs/augimgfeat{cam + 1}.png'))
-                plt.imshow(visualize_img)
-                plt.show()
+                # plt.imshow(visualize_img)
+                # plt.show()
 
         # img heads
         _, C, H, W = imgs_feat.shape
@@ -195,14 +219,13 @@ class MVDeTr(nn.Module):
 
         # world feat
         H, W = self.Rworld_shape
-        world_feat = kornia.warp_perspective(imgs_feat, proj_mats.to(imgs.device),
-                                             self.Rworld_shape).view(B, N, C, H, W)
+        world_feat = self.warp_perspective(imgs_feat, proj_mats).view(B, N, C, H, W)
         if visualize:
             for cam in range(N):
                 visualize_img = array2heatmap(torch.norm(world_feat[0, cam].detach(), dim=0).cpu())
                 visualize_img.save(os.path.join(logdir, f'imgs/projfeat{cam + 1}.png'))
-                plt.imshow(visualize_img)
-                plt.show()
+                # plt.imshow(visualize_img)
+                # plt.show()
         world_feat = self.world_feat(world_feat, visualize=visualize)
 
         # world heads
@@ -213,12 +236,12 @@ class MVDeTr(nn.Module):
         if visualize:
             visualize_img = array2heatmap(torch.norm(world_feat[0].detach(), dim=0).cpu())
             visualize_img.save(os.path.join(logdir, f'imgs/worldfeatall.png'))
-            plt.imshow(visualize_img)
-            plt.show()
+            # plt.imshow(visualize_img)
+            # plt.show()
             visualize_img = array2heatmap(torch.sigmoid(world_heatmap.detach())[0, 0].cpu())
             visualize_img.save(os.path.join(logdir, f'imgs/worldres.png'))
-            plt.imshow(visualize_img)
-            plt.show()
+            # plt.imshow(visualize_img)
+            # plt.show()
         return (world_heatmap, world_offset), (imgs_heatmap, imgs_offset, imgs_wh)
 
 
@@ -229,10 +252,10 @@ def test():
     from torch.utils.data import DataLoader
     from multiview_detector.utils.decode import ctdet_decode
 
-    dataset = frameDataset(Wildtrack(os.path.expanduser('workspace/Data/Wildtrack')), train=False, augmentation=False)
+    dataset = frameDataset(Wildtrack(os.path.expanduser('/workspace/Data/Wildtrack')), train=False, augmentation=False)
     create_reference_map(dataset, 4)
     dataloader = DataLoader(dataset, 1, False, num_workers=0)
-    model = MVDeTr(dataset, world_feat_arch='deform_trans').cuda()
+    model = ABCDet(dataset, world_feat_arch='deform_trans').cuda()
     # model.load_state_dict(torch.load(
     #     '../../logs/wildtrack/augFCS_deform_trans_lr0.001_baseR0.1_neck128_out64_alpha1.0_id0_drop0.5_dropcam0.0_worldRK4_10_imgRK12_10_2021-04-09_22-39-28/MultiviewDetector.pth'))
     imgs, world_gt, imgs_gt, affine_mats, frame = next(iter(dataloader))
