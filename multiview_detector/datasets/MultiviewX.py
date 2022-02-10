@@ -32,6 +32,7 @@ class MultiviewX(VisionDataset):
         self.worldcoord_from_worldgrid_mat = np.array([[0.025, 0, 0], [0, 0.025, 0], [0, 0, 1]])
         self.intrinsic_matrices, self.extrinsic_matrices = zip(
             *[self.get_intrinsic_extrinsic_matrix(cam) for cam in range(self.num_cam)])
+        self.depth_margin = 0.1
 
     def get_image_fpaths(self, frame_range):
         img_fpaths = {cam: {} for cam in range(self.num_cam)}
