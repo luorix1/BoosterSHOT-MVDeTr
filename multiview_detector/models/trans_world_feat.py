@@ -97,13 +97,13 @@ class DeformTransWorldFeat(nn.Module):
         valid_ratios = torch.ones([B, N, 2], device=x.device)
         memory = self.encoder(src_flatten, spatial_shapes, level_start_index, valid_ratios, lvl_pos_embed_flatten)
 
-        if visualize:
-            for cam in range(N):
-                world_feat = memory.view(B, N, H, W, C).permute(0, 1, 4, 2, 3).contiguous()
-                visualize_img = array2heatmap(torch.norm(world_feat[0, cam].detach(), dim=0).cpu())
-                visualize_img.save(f'../../imgs/worldfeat{cam + 1}.png')
-                plt.imshow(visualize_img)
-                plt.show()
+        # if visualize:
+        #     for cam in range(N):
+        #         world_feat = memory.view(B, N, H, W, C).permute(0, 1, 4, 2, 3).contiguous()
+        #         visualize_img = array2heatmap(torch.norm(world_feat[0, cam].detach(), dim=0).cpu())
+        #         visualize_img.save(f'../../imgs/worldfeat{cam + 1}.png')
+        #         plt.imshow(visualize_img)
+        #         plt.show()
         merged_feat = self.merge_linear(memory.view(B, N, H, W, C).permute(0, 1, 4, 2, 3).contiguous().
                                         view(B, N * C, H, W))
         merged_feat = self.upsample(merged_feat)
