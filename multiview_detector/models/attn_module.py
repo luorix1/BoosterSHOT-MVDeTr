@@ -108,3 +108,61 @@ class CBAM(nn.Module):
         if not self.no_spatial:
             x_out = self.SpatialGate(x_out)
         return x_out
+
+class ExpandedChannelGate(nn.Module):
+    def __init__(self, gate_channels, multiplier, reduction_ratio=16, pool_types=['avg', 'max']):
+        super(ExpandedChannelGate, self).__init__()
+        self.gate_channels = gate_channels
+        self.multiplier = multiplier
+        self.mlp = nn.Sequential(
+            Flatten(),
+            nn.Linear(gate_channels, gate_channels // reduction_ratio),
+            nn.ReLU(),
+            nn.Linear(gate_channels // reduction_ratio, gate_channels * multiplier)
+        )
+        self.pool_types = pool_types
+
+    def forward(self, x):
+        channel_att_sum = None
+        for pool_type in self.pool_types:
+            if pool_type == 'avg':
+                avg_pool = F.avg_pool2d(
+                    x, (x.size(2), x.size(3)), stride=(x.size(2), x.size(3)))
+                channel_att_raw = self.mlp(avg_pool)
+            elif pool_type == 'max':
+                max_pool = F.max_pool2d(
+                    x, (x.size(2), x.size(3)), stride=(x.size(2), x.size(3)))
+                channel_att_raw = self.mlp(max_pool)
+            elif pool_type == 'lp':
+                lp_pool = F.lp_pool2d(
+                    x, 2, (x.size(2), x.size(3)), stride=(x.size(2), x.size(3)))
+                channel_att_raw = self.mlp(lp_pool)
+            elif pool_type == 'lse':
+                # LSE pool only
+                lse_pool = logsumexp_2d(x)
+                channel_att_raw = self.mlp(lse_pool)
+
+            if channel_att_sum is None:
+                channel_att_sum = channel_att_raw
+            else:
+                channel_att_sum = channel_att_sum + channel_att_raw
+
+        N, _, _, _ = x.shape        
+        channel_att_sum = channel_att_sum.unsqueeze(2).reshape((N, -1, self.multiplier))
+        channel_att_sum = F.softmax(channel_att_sum, dim=2)
+        scale = channel_att_sum.unsqueeze(2).unsqueeze(3)
+        return scale
+
+class ExpandedSpatialGate(nn.Module):
+    def __init__(self, multiplier):
+        super(ExpandedSpatialGate, self).__init__()
+        kernel_size = 7
+        self.compress = ChannelPool()
+        self.spatial = SHOTConv(2, multiplier, kernel_size, stride=1, padding=(
+            kernel_size-1) // 2, relu=False)
+
+    def forward(self, x):
+        x_compress = self.compress(x)
+        x_out = self.spatial(x_compress).permute([0, 2, 3, 1]).unsqueeze(1)
+        scale = F.softmax(x_out, dim=-1)  # broadcasting
+        return scale

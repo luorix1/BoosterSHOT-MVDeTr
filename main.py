@@ -104,7 +104,7 @@ def main(args):
                     bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout).cuda()
     elif args.model == 'ABCDet':
         model = ABCDet(train_set, args.arch, world_feat_arch=args.world_feat,
-                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
+                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales, variant=args.variant).cuda()
     else:
         raise Exception('The selected model is not supported.')
 
@@ -187,6 +187,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--world_feat', type=str, default='deform_trans',
                         choices=['conv', 'trans', 'deform_conv', 'deform_trans', 'aio'])
+    parser.add_argument('--variant', type=str, default='SHOT', choices=['SHOT', 'ChannelGate', 'SpatialGate', 'GLAM', 'CBAM', 'ChannelGroup'])
     parser.add_argument('--bottleneck_dim', type=int, default=128)
     parser.add_argument('--outfeat_dim', type=int, default=0)
     parser.add_argument('--world_reduce', type=int, default=4)

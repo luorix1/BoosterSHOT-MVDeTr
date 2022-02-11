@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from multiview_detector.models.resnet import resnet18
 from multiview_detector.utils.image_utils import img_color_denormalize, array2heatmap
 from multiview_detector.utils.projection import get_worldcoord_from_imgcoord_mat, project_2d_points
+from multiview_detector.models.attn_module import CBAM, ExpandedChannelGate, ExpandedSpatialGate
 from multiview_detector.models.conv_world_feat import ConvWorldFeat, DeformConvWorldFeat
 from multiview_detector.models.trans_world_feat import TransformerWorldFeat, DeformTransWorldFeat
 
@@ -73,11 +74,12 @@ def create_reference_map(dataset, n_points=4, downsample=2, visualize=False):
 
 class ABCDet(nn.Module):
     def __init__(self, dataset, arch='resnet18', world_feat_arch='conv',
-                 bottleneck_dim=128, outfeat_dim=64, dropout=0.5, depth_scales=4):
+                 bottleneck_dim=128, outfeat_dim=64, dropout=0.5, depth_scales=4, variant='SHOT'):
         super().__init__()
         self.Rimg_shape, self.Rworld_shape = dataset.Rimg_shape, dataset.Rworld_shape
         self.img_reduce = dataset.img_reduce
         self.depth_scales = depth_scales
+        self.variant = variant
 
         # world grid change to xy indexing
         world_zoom_mat = np.diag([dataset.world_reduce, dataset.world_reduce, 1])
@@ -118,6 +120,8 @@ class ABCDet(nn.Module):
         else:
             raise Exception('architecture currently support [vgg11, resnet18]')
 
+        self.base_dim = base_dim
+
         if bottleneck_dim:
             self.bottleneck = nn.Sequential(nn.Conv2d(base_dim, bottleneck_dim, 1), nn.Dropout2d(dropout))
             base_dim = bottleneck_dim
@@ -144,7 +148,21 @@ class ABCDet(nn.Module):
                                                    n_points=n_points, stride=2, reference_points=reference_points)
         else:
             raise Exception
+
+        # SHOT Soft Selection Module
         self.depth_classifier = output_head(base_dim, outfeat_dim, self.depth_scales)
+
+        # Channel-wise attention module
+        self.channel_attn = ExpandedChannelGate(base_dim, self.depth_scales)
+
+        # Spatial attention module
+        self.spatial_attn = ExpandedSpatialGate(self.depth_scales)
+
+        # CBAM module dict
+        self.CBAM = nn.ModuleDict({f'{i}': CBAM(base_dim) for i in range(self.depth_scales)})
+
+        # Group Norm module
+        self.GN = group_norm = nn.GroupNorm(self.depth_scales, base_dim)
 
         # world heads
         self.world_heatmap = output_head(base_dim, outfeat_dim, 1)
@@ -159,17 +177,80 @@ class ABCDet(nn.Module):
         fill_fc_weights(self.world_offset)
         pass
 
-    def warp_perspective(self, img_feature_all, proj_mats):
+    def warp_perspective(self, img_feature_all, proj_mats, variant):
         warped_feat = 0
-        depth_select = self.depth_classifier(
-            img_feature_all).softmax(dim=1)  # [b*n,d,h,w]
+        if variant == 'SHOT':
+            depth_select = self.depth_classifier(
+                img_feature_all).softmax(dim=1)  # [b*n,d,h,w]
+            for i in range(self.depth_scales):
+                in_feat = img_feature_all * depth_select[:, i][:, None]
+                out_feat = kornia.warp_perspective(
+                    in_feat, proj_mats[i], self.Rworld_shape)
+                # [b*n,c,h,w]
+                warped_feat += out_feat
 
-        for i in range(self.depth_scales):
-            in_feat = img_feature_all * depth_select[:, i][:, None]
-            out_feat = kornia.warp_perspective(
-                in_feat, proj_mats[i], self.Rworld_shape)
-            # [b*n,c,h,w]
-            warped_feat += out_feat
+        elif variant == 'ChannelGate':
+            attn = self.channel_attn(img_feature_all)
+            for i in range(self.depth_scales):
+                in_feat = img_feature_all * attn[:, :, :, :, i]
+                out_feat = kornia.warp_perspective(
+                    in_feat, self.proj_mats[i], self.Rworld_shape)
+                # [b*n,c,h,w]
+                warped_feat += out_feat
+
+        elif variant == 'SpatialGate':
+            attn = self.spatial_attn(img_feature_all)
+            for i in range(self.depth_scales):
+                in_feat = img_feature_all * attn[:, :, :, :, i]
+                out_feat = kornia.warp_perspective(
+                    in_feat, self.proj_mats[i], self.Rworld_shape)
+                # [b*n,c,h,w]
+                warped_feat += out_feat
+
+        elif variant == 'GLAM':
+            channel_attn = self.channel_attn(img_feature_all)
+            spatial_attn = self.spatial_attn(img_feature_all)
+            for i in range(self.depth_scales):
+                in_feat = img_feature_all * channel_attn[:, :, :, :, i] * spatial_Attn[:, :, :, :, i]
+                out_feat = kornia.warp_perspective(
+                    in_feat, self.proj_mats[i], self.Rworld_shape)
+                # [b*n,c,h,w]
+                warped_feat += out_feat
+
+        elif variant == 'CBAM':
+            for i in range(self.depth_scales):
+                in_feat = self.CBAM[f'{i}'](img_feature_all)
+                out_feat = kornia.warp_perspective(
+                    in_feat, self.proj_mats[i], self.Rworld_shape)
+                # [b*n,c,h,w]
+                warped_feat += out_feat
+
+        elif variant == 'ChannelGroup':
+            # Channel-wise grouping path
+            S = self.base_dim // self.depth_scales
+            for i in range(self.depth_scales):
+                in_feat = self.GN(img_feature_all)
+                in_feat = in_feat[:, i * S : (i+1) * S, :, :]
+                out_feat = kornia.warp_perspective(in_feat, self.proj_mats[i], self.Rworld_shape)
+                # for the first homography, re-initialize warped_feat
+                if i == 0:
+                    warped_feat = out_feat
+                # else, concatenate channel-wise
+                else:
+                    warped_feat = torch.cat((warped_feat, out_feat), dim=1)
+
+            # SHOT path
+            depth_select = self.depth_classifier(
+                img_feature_all).softmax(dim=1)  # [b*n,d,h,w]
+            for i in range(self.depth_scales):
+                in_feat = img_feature_all * depth_select[:, i][:, None]
+                out_feat = kornia.warp_perspective(
+                    in_feat, proj_mats[i], self.Rworld_shape)
+                # [b*n,c,h,w]
+                warped_feat += out_feat
+                
+        else:
+            raise Exception('This variant is not supported.')
         return warped_feat
 
     def forward(self, imgs, M, logdir=None, visualize=False):
@@ -219,7 +300,7 @@ class ABCDet(nn.Module):
 
         # world feat
         H, W = self.Rworld_shape
-        world_feat = self.warp_perspective(imgs_feat, proj_mats).view(B, N, C, H, W)
+        world_feat = self.warp_perspective(imgs_feat, proj_mats, self.variant).view(B, N, C, H, W)
         if visualize:
             for cam in range(N):
                 visualize_img = array2heatmap(torch.norm(world_feat[0, cam].detach(), dim=0).cpu())
