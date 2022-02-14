@@ -111,8 +111,14 @@ def main(args):
     param_dicts = [{"params": [p for n, p in model.named_parameters() if 'base' not in n and p.requires_grad], },
                    {"params": [p for n, p in model.named_parameters() if 'base' in n and p.requires_grad],
                     "lr": args.lr * args.base_lr_ratio, }, ]
-    # optimizer = optim.SGD(param_dicts, lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
-    optimizer = optim.Adam(param_dicts, lr=args.lr, weight_decay=args.weight_decay)
+    
+    if args.optimizer == 'Adam':
+        optimizer = optim.Adam(param_dicts, lr=args.lr, weight_decay=args.weight_decay)
+    elif args.optimizer == 'SGD':
+        optimizer = optim.SGD(param_dicts, lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
+    else:
+        raise Exception('The selected optimizer is not supported.')
+
     scaler = GradScaler()
 
     # def warmup_lr_scheduler(epoch, warmup_epochs=2):
@@ -122,10 +128,14 @@ def main(args):
     #         return (np.cos((epoch - warmup_epochs) / (args.epochs - warmup_epochs) * np.pi) + 1) / 2
 
     # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, args.epochs)
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, steps_per_epoch=len(train_loader),
-                                                    epochs=args.epochs)
-    # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [10, 15], 0.1)
     # scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, warmup_lr_scheduler)
+    if args.scheduler == 'OneCycleLR':
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, steps_per_epoch=len(train_loader),
+                                                    epochs=args.epochs)
+    elif args.scheduler == 'MultiStepLR':
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [5, 8], 0.1)
+    else:
+        raise Exception('The selected scheduler is not supported.')
 
     trainer = PerspectiveTrainer(model, logdir, args.cls_thres, args.alpha, args.use_mse, args.id_ratio, args.visualize)
 
@@ -174,6 +184,8 @@ if __name__ == '__main__':
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument('--dropcam', type=float, default=0.0)
     parser.add_argument('--model', type=str, default='MVDeTr', choices=['MVDeTr', 'ABCDet'])
+    parser.add_argument('--optimizer', type=str, default='Adam', choices=['Adam', 'SGD'])
+    parser.add_argument('--scheduler', type=str, default='OneCycleLR', choices=['OneCycleLR', 'MultiStepLR'])
     parser.add_argument('--depth_scales', type=int, default=4)
     parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train')
     parser.add_argument('--lr', type=float, default=5e-4, help='learning rate')
