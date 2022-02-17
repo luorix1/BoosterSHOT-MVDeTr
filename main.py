@@ -16,6 +16,7 @@ from torch.utils.data import DataLoader
 from multiview_detector.datasets import *
 from multiview_detector.models.mvdetr import MVDeTr
 from multiview_detector.models.abcdet import ABCDet
+from multiview_detector.models.custom import Custom
 from multiview_detector.utils.logger import Logger
 from multiview_detector.utils.draw_curve import draw_curve
 from multiview_detector.utils.str2bool import str2bool
@@ -105,6 +106,9 @@ def main(args):
     elif args.model == 'ABCDet':
         model = ABCDet(train_set, args.arch, world_feat_arch=args.world_feat,
                     bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales, variant=args.variant).cuda()
+    elif args.model == 'custom':
+        model = Custom(train_set, args.arch, world_feat_arch=args.world_feat,
+                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales, variant=args.variant).cuda()
     else:
         raise Exception('The selected model is not supported.')
 
@@ -177,7 +181,7 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--batch_size', type=int, default=1, help='input batch size for training')
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument('--dropcam', type=float, default=0.0)
-    parser.add_argument('--model', type=str, default='MVDeTr', choices=['MVDeTr', 'ABCDet'])
+    parser.add_argument('--model', type=str, default='MVDeTr', choices=['MVDeTr', 'ABCDet', 'custom'])
     parser.add_argument('--optimizer', type=str, default='Adam', choices=['Adam', 'SGD'])
     parser.add_argument('--depth_scales', type=int, default=4)
     parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train')
