@@ -49,21 +49,22 @@ class PerspectiveTrainer(BaseTrainer):
             # with autocast():
             # supervised
             (world_heatmap, world_offset), (imgs_heatmap, imgs_offset, imgs_wh) = self.model(data, affine_mats)
-            loss_w_hm = self.focal_loss(world_heatmap, world_gt['heatmap'])
-            loss_w_off = self.regress_loss(world_offset, world_gt['reg_mask'], world_gt['idx'], world_gt['offset'])
-            # loss_w_id = self.ce_loss(world_id, world_gt['reg_mask'], world_gt['idx'], world_gt['pid'])
-            loss_img_hm = self.focal_loss(imgs_heatmap, imgs_gt['heatmap'])
-            loss_img_off = self.regress_loss(imgs_offset, imgs_gt['reg_mask'], imgs_gt['idx'], imgs_gt['offset'])
-            loss_img_wh = self.regress_loss(imgs_wh, imgs_gt['reg_mask'], imgs_gt['idx'], imgs_gt['wh'])
-            # loss_img_id = self.ce_loss(imgs_id, imgs_gt['reg_mask'], imgs_gt['idx'], imgs_gt['pid'])
-            # multiview regularization
-
-            w_loss = loss_w_hm + loss_w_off  # + self.id_ratio * loss_w_id
-            img_loss = loss_img_hm + loss_img_off + loss_img_wh * 0.1  # + self.id_ratio * loss_img_id
-            loss = w_loss + img_loss / N * self.alpha
             if self.use_mse:
                 loss = self.mse_loss(world_heatmap, world_gt['heatmap'].to(world_heatmap.device)) + \
                        self.alpha * self.mse_loss(imgs_heatmap, imgs_gt['heatmap'].to(imgs_heatmap.device))
+            else:
+                loss_w_hm = self.focal_loss(world_heatmap, world_gt['heatmap'])
+                loss_w_off = self.regress_loss(world_offset, world_gt['reg_mask'], world_gt['idx'], world_gt['offset'])
+                # loss_w_id = self.ce_loss(world_id, world_gt['reg_mask'], world_gt['idx'], world_gt['pid'])
+                loss_img_hm = self.focal_loss(imgs_heatmap, imgs_gt['heatmap'])
+                loss_img_off = self.regress_loss(imgs_offset, imgs_gt['reg_mask'], imgs_gt['idx'], imgs_gt['offset'])
+                loss_img_wh = self.regress_loss(imgs_wh, imgs_gt['reg_mask'], imgs_gt['idx'], imgs_gt['wh'])
+                # loss_img_id = self.ce_loss(imgs_id, imgs_gt['reg_mask'], imgs_gt['idx'], imgs_gt['pid'])
+                # multiview regularization
+
+                w_loss = loss_w_hm + loss_w_off  # + self.id_ratio * loss_w_id
+                img_loss = loss_img_hm + loss_img_off + loss_img_wh * 0.1  # + self.id_ratio * loss_img_id
+                loss = w_loss + img_loss / N * self.alpha
 
             t_f = time.time()
             t_forward += t_f - t_b
@@ -109,18 +110,24 @@ class PerspectiveTrainer(BaseTrainer):
             # with autocast():
             with torch.no_grad():
                 (world_heatmap, world_offset), (imgs_heatmap, imgs_offset, imgs_wh) = self.model(data, affine_mats, self.logdir, visualize)
-                loss_w_hm = self.focal_loss(world_heatmap, world_gt['heatmap'])
-                loss = loss_w_hm
                 if self.use_mse:
                     loss = self.mse_loss(world_heatmap, world_gt['heatmap'].to(world_heatmap.device)) + \
                            self.alpha * self.mse_loss(imgs_heatmap, imgs_gt['heatmap'].to(imgs_heatmap.device))
+                else:
+                    loss_w_hm = self.focal_loss(world_heatmap, world_gt['heatmap'])
+                    loss = loss_w_hm
 
             losses += loss.item()
 
             if res_fpath is not None:
-                xys = mvdet_decode(torch.sigmoid(world_heatmap.detach().cpu()), world_offset.detach().cpu(),
-                                   reduce=dataloader.dataset.world_reduce)
-                # xys = mvdet_decode(world_heatmap.detach().cpu(), reduce=dataloader.dataset.world_reduce)
+                # xys = mvdet_decode(torch.sigmoid(world_heatmap.detach().cpu()), world_offset.detach().cpu(),
+                #                     reduce=dataloader.dataset.world_reduce)
+                if world_offset is not None:
+                    xys = mvdet_decode(torch.sigmoid(world_heatmap.detach().cpu()), world_offset.detach().cpu(),
+                                    reduce=dataloader.dataset.world_reduce)
+                else:
+                    xys = mvdet_decode(torch.sigmoid(world_heatmap.detach().cpu()),
+                                    reduce=dataloader.dataset.world_reduce)
                 grid_xy, scores = xys[:, :, :2], xys[:, :, 2:3]
                 if dataloader.dataset.base.indexing == 'xy':
                     positions = grid_xy
