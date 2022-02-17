@@ -156,13 +156,16 @@ class ExpandedChannelGate(nn.Module):
 class ExpandedSpatialGate(nn.Module):
     def __init__(self, multiplier):
         super(ExpandedSpatialGate, self).__init__()
+        # self.conv = nn.Sequential(nn.Conv2d(128, 64, 3, padding=1), nn.ReLU(),
+        #                    nn.Conv2d(64, multiplier, 1))
         kernel_size = 7
         self.compress = ChannelPool()
         self.spatial = SHOTConv(2, multiplier, kernel_size, stride=1, padding=(
-            kernel_size-1) // 2, relu=False)
+            kernel_size-1) // 2, relu=True)
 
     def forward(self, x):
+        # x_out = self.conv(x)
         x_compress = self.compress(x)
-        x_out = self.spatial(x_compress).permute([0, 2, 3, 1]).unsqueeze(1)
-        scale = F.softmax(x_out, dim=-1)  # broadcasting
+        x_out = self.spatial(x_compress)
+        scale = F.softmax(x_out, dim=1)  # broadcasting
         return scale
