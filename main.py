@@ -19,7 +19,9 @@ from multiview_detector.models.shot import SHOT
 from multiview_detector.models.cashot import CASHOT
 from multiview_detector.models.sashot import SASHOT
 from multiview_detector.models.cbamshot import CBAMSHOT
+from multiview_detector.models.glamshot import GLAMSHOT
 from multiview_detector.models.boostershot import BoosterSHOT
+from multiview_detector.models.softboostershot import SoftBoosterSHOT
 from multiview_detector.utils.logger import Logger
 from multiview_detector.utils.draw_curve import draw_curve
 from multiview_detector.utils.str2bool import str2bool
@@ -124,6 +126,9 @@ def main(args):
     elif args.model == 'BoosterSHOT':
         model = BoosterSHOT(train_set, args.arch, world_feat_arch=args.world_feat,
                     bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
+    elif args.model == 'SoftBoosterSHOT':
+        model = BoosterSHOT(train_set, args.arch, world_feat_arch=args.world_feat,
+                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
     else:
         raise Exception('The selected model is not supported.')
 
@@ -196,7 +201,7 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--batch_size', type=int, default=1, help='input batch size for training')
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument('--dropcam', type=float, default=0.0)
-    parser.add_argument('--model', type=str, default='MVDeTr', choices=['MVDeTr', 'SHOT', 'CASHOT', 'SASHOT', 'CBAMSHOT', 'GLAMSHOT', 'BoosterSHOT'])
+    parser.add_argument('--model', type=str, default='MVDeTr', choices=['MVDeTr', 'SHOT', 'CASHOT', 'SASHOT', 'CBAMSHOT', 'GLAMSHOT', 'BoosterSHOT', 'SoftBoosterSHOT'])
     parser.add_argument('--optimizer', type=str, default='Adam', choices=['Adam', 'SGD'])
     parser.add_argument('--depth_scales', type=int, default=4)
     parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train')
