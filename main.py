@@ -15,8 +15,11 @@ from torch import optim
 from torch.utils.data import DataLoader
 from multiview_detector.datasets import *
 from multiview_detector.models.mvdetr import MVDeTr
-from multiview_detector.models.abcdet import ABCDet
-from multiview_detector.models.custom import Custom
+from multiview_detector.models.shot import SHOT
+from multiview_detector.models.cashot import CASHOT
+from multiview_detector.models.sashot import SASHOT
+from multiview_detector.models.cbamshot import CBAMSHOT
+from multiview_detector.models.boostershot import BoosterSHOT
 from multiview_detector.utils.logger import Logger
 from multiview_detector.utils.draw_curve import draw_curve
 from multiview_detector.utils.str2bool import str2bool
@@ -103,12 +106,24 @@ def main(args):
     if args.model == 'MVDeTr':
         model = MVDeTr(train_set, args.arch, world_feat_arch=args.world_feat,
                     bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout).cuda()
-    elif args.model == 'ABCDet':
-        model = ABCDet(train_set, args.arch, world_feat_arch=args.world_feat,
-                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales, variant=args.variant).cuda()
-    elif args.model == 'custom':
-        model = Custom(train_set, args.arch, world_feat_arch=args.world_feat,
-                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales, variant=args.variant).cuda()
+    elif args.model == 'SHOT':
+        model = SHOT(train_set, args.arch, world_feat_arch=args.world_feat,
+                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
+    elif args.model == 'CASHOT':
+        model = CASHOT(train_set, args.arch, world_feat_arch=args.world_feat,
+                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
+    elif args.model == 'SASHOT':
+        model = SASHOT(train_set, args.arch, world_feat_arch=args.world_feat,
+                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
+    elif args.model == 'CBAMSHOT':
+        model = CBAMSHOT(train_set, args.arch, world_feat_arch=args.world_feat,
+                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
+    elif args.model == 'GLAMSHOT':
+        model = GLAMSHOT(train_set, args.arch, world_feat_arch=args.world_feat,
+                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
+    elif args.model == 'BoosterSHOT':
+        model = BoosterSHOT(train_set, args.arch, world_feat_arch=args.world_feat,
+                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
     else:
         raise Exception('The selected model is not supported.')
 
@@ -181,7 +196,7 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--batch_size', type=int, default=1, help='input batch size for training')
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument('--dropcam', type=float, default=0.0)
-    parser.add_argument('--model', type=str, default='MVDeTr', choices=['MVDeTr', 'ABCDet', 'custom'])
+    parser.add_argument('--model', type=str, default='MVDeTr', choices=['MVDeTr', 'SHOT', 'CASHOT', 'SASHOT', 'CBAMSHOT', 'GLAMSHOT', 'BoosterSHOT'])
     parser.add_argument('--optimizer', type=str, default='Adam', choices=['Adam', 'SGD'])
     parser.add_argument('--depth_scales', type=int, default=4)
     parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train')
@@ -196,7 +211,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--world_feat', type=str, default='deform_trans',
                         choices=['conv', 'trans', 'deform_conv', 'deform_trans', 'aio'])
-    parser.add_argument('--variant', type=str, default='SHOT', choices=['SHOT', 'ChannelGate', 'SpatialGate', 'GLAM', 'CBAM', 'ChannelGroup'])
+    # parser.add_argument('--variant', type=str, default='SHOT', choices=['SHOT', 'ChannelGate', 'SpatialGate', 'GLAM', 'CBAM', 'ChannelGroup'])
     parser.add_argument('--bottleneck_dim', type=int, default=128)
     parser.add_argument('--outfeat_dim', type=int, default=0)
     parser.add_argument('--world_reduce', type=int, default=4)

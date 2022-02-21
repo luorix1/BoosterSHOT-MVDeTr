@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from multiview_detector.models.resnet import resnet18
 from multiview_detector.utils.image_utils import img_color_denormalize, array2heatmap
 from multiview_detector.utils.projection import get_worldcoord_from_imgcoord_mat, project_2d_points
-from multiview_detector.models.attn_module import CBAM, ExpandedChannelGate, ExpandedSpatialGate
+from multiview_detector.models.attn_module import ExpandedSpatialGate
 from multiview_detector.models.conv_world_feat import ConvWorldFeat, DeformConvWorldFeat
 from multiview_detector.models.trans_world_feat import TransformerWorldFeat, DeformTransWorldFeat
 
@@ -29,17 +29,6 @@ def output_head(in_dim, feat_dim, out_dim):
     else:
         fc = nn.Sequential(nn.Conv2d(in_dim, out_dim, 1))
     return fc
-
-def create_coord_map(img_size, with_r=False):
-    H, W = img_size
-    grid_x, grid_y = np.meshgrid(np.arange(W), np.arange(H))
-    grid_x = torch.from_numpy(grid_x / (W - 1) * 2 - 1).float()
-    grid_y = torch.from_numpy(grid_y / (H - 1) * 2 - 1).float()
-    ret = torch.stack([grid_x, grid_y], dim=0).unsqueeze(0)
-    if with_r:
-        grid_r = torch.sqrt(torch.pow(grid_x, 2) + torch.pow(grid_y, 2)).view([1, 1, H, W])
-        ret = torch.cat([ret, grid_r], dim=1)
-    return ret
 
 
 def create_reference_map(dataset, n_points=4, downsample=2, visualize=False):
@@ -83,17 +72,13 @@ def create_reference_map(dataset, n_points=4, downsample=2, visualize=False):
     return ref_maps
 
 
-class Custom(nn.Module):
+class SASHOT(nn.Module):
     def __init__(self, dataset, arch='resnet18', world_feat_arch='conv',
-                 bottleneck_dim=128, outfeat_dim=64, dropout=0.5, depth_scales=4, variant='SHOT'):
+                 bottleneck_dim=128, outfeat_dim=64, dropout=0.5, depth_scales=4):
         super().__init__()
         self.Rimg_shape, self.Rworld_shape = dataset.Rimg_shape, dataset.Rworld_shape
         self.img_reduce = dataset.img_reduce
         self.depth_scales = depth_scales
-
-        self.num_cam = dataset.base.num_cam
-
-        self.coord_map = create_coord_map(np.array(self.Rworld_shape))
 
         # world grid change to xy indexing
         world_zoom_mat = np.diag([dataset.world_reduce, dataset.world_reduce, 1])
@@ -134,67 +119,55 @@ class Custom(nn.Module):
         else:
             raise Exception('architecture currently support [vgg11, resnet18]')
 
-        self.base_dim = base_dim
-        
-        # img heads
-        self.img_heatmap = nn.Sequential(nn.Conv2d(self.base_dim, 64, 1), nn.ReLU(), nn.Conv2d(64, 1, 1, bias=False))
-        
         if bottleneck_dim:
             self.bottleneck = nn.Sequential(nn.Conv2d(base_dim, bottleneck_dim, 3, padding=2, dilation=2), nn.ReLU(), nn.Conv2d(bottleneck_dim, bottleneck_dim, 3, padding=2, dilation=2))
             base_dim = bottleneck_dim
         else:
             self.bottleneck = nn.Identity()
 
-        self.bottleneck_dim = base_dim
+        # img heads
+        self.img_heatmap = nn.Sequential(nn.Conv2d(base_dim, 64, 1), nn.ReLU(), nn.Conv2d(64, 1, 1, bias=False))
+        self.img_offset = output_head(base_dim, outfeat_dim, 2)
+        self.img_wh = output_head(base_dim, outfeat_dim, 2)
 
-        # SHOT Soft Selection Module
-        self.depth_classifier = nn.Sequential(nn.Conv2d(self.bottleneck_dim, 64, 1), nn.ReLU(),
-                                              nn.Conv2d(64, self.depth_scales, 1, bias=False))
+        # world feat
+        if world_feat_arch == 'conv':
+            self.world_feat = ConvWorldFeat(dataset.num_cam, dataset.Rworld_shape, base_dim)
+        elif world_feat_arch == 'trans':
+            self.world_feat = TransformerWorldFeat(dataset.num_cam, dataset.Rworld_shape, base_dim)
+        elif world_feat_arch == 'deform_conv':
+            self.world_feat = DeformConvWorldFeat(dataset.num_cam, dataset.Rworld_shape, base_dim)
+        elif world_feat_arch == 'deform_trans':
+            n_points = 4
+            reference_points = create_reference_map(dataset, n_points).repeat([dataset.num_cam, 1, 1, 1])
+            self.world_feat = DeformTransWorldFeat(dataset.num_cam, dataset.Rworld_shape, base_dim,
+                                                   n_points=n_points, stride=2, reference_points=reference_points)
+        else:
+            raise Exception
 
-        # Group Norm module
-        self.GN = group_norm = nn.GroupNorm(self.depth_scales, base_dim)
+        # Spatial Attention (expanded to fit # of homographies)
+        self.spatial_attn = ExpandedSpatialGate(self.depth_scales)
 
-        # CNNs applied before merging multiple homographies
-        self.feat_before_merge_SHOT = nn.ModuleDict({
-            f'{i}': nn.Conv2d(self.bottleneck_dim, self.bottleneck_dim, 3, padding=1)
+        self.feat_before_merge = nn.ModuleDict({
+            f'{i}': nn.Conv2d(base_dim, base_dim, 3, padding=1)
             for i in range(self.depth_scales)
         })
-        self.feat_before_merge_ChannelGroup = nn.ModuleDict({
-            f'{i}': nn.Conv2d(self.bottleneck_dim // self.depth_scales, self.bottleneck_dim // self.depth_scales, 3, padding=1)
-            for i in range(self.depth_scales)
-        })
-
-        self.world_feat = nn.Sequential(nn.Conv2d(self.bottleneck_dim * self.num_cam + 2, 512, 3, padding=1), nn.ReLU(),
-                                            nn.Conv2d(512, 512, 3, padding=2, dilation=2), nn.ReLU(),)
 
         # world heads
-        self.world_heatmap = nn.Conv2d(512, 1, 3, padding=4, dilation=4, bias=False)
+        self.world_heatmap = nn.Conv2d(base_dim, 1, 3, padding=4, dilation=4, bias=False)
+        self.world_offset = output_head(base_dim, outfeat_dim, 2)
         pass
 
     def warp_perspective(self, img_feature_all, proj_mats):
         warped_feat = 0
-        
-        # Channel-wise grouping path
-        # S = self.bottleneck_dim // self.depth_scales
-        # for i in range(self.depth_scales):
-        #     in_feat = self.GN(img_feature_all)
-        #     in_feat = in_feat[:, i * S : (i+1) * S, :, :]
-        #     out_feat = kornia.warp_perspective(in_feat, proj_mats[i], self.Rworld_shape)
-        #     out_feat = self.feat_before_merge_ChannelGroup[f'{i}'](out_feat)
-        #     if i == 0:
-        #         warped_feat = out_feat
-        #     else:
-        #         warped_feat = torch.cat((warped_feat, out_feat), dim=1)
-
-        # SHOT path
-        depth_select = self.depth_classifier(
-            img_feature_all).softmax(dim=1)  # [b*n,d,h,w]
+        depth_select = self.spatial_attn(
+            img_feature_all)  # [b*n,d,h,w]
         for i in range(self.depth_scales):
             in_feat = img_feature_all * depth_select[:, i][:, None]
             out_feat = kornia.warp_perspective(
                 in_feat, proj_mats[i], self.Rworld_shape)
             # [b*n,c,h,w]
-            warped_feat += self.feat_before_merge_SHOT[f'{i}'](out_feat)
+            warped_feat += self.feat_before_merge[f'{i}'](out_feat)
         
         return warped_feat
 
@@ -228,13 +201,8 @@ class Custom(nn.Module):
                     # plt.imshow(visualize_img)
                     # plt.show()
 
-        imgs_feat = self.base(imgs)
-
-        # img heads
-        imgs_heatmap = self.img_heatmap(imgs_feat)
-        
+        imgs_feat = self.base(imgs)        
         imgs_feat = self.bottleneck(imgs_feat)
-        _, C, H, W = imgs_feat.shape
         
         if visualize:
             for cam in range(N):
@@ -242,6 +210,12 @@ class Custom(nn.Module):
                 visualize_img.save(os.path.join(logdir, f'imgs/augimgfeat{cam + 1}.png'))
                 # plt.imshow(visualize_img)
                 # plt.show()
+
+        # img heads
+        _, C, H, W = imgs_feat.shape
+        imgs_heatmap = self.img_heatmap(imgs_feat)
+        imgs_offset = self.img_offset(imgs_feat)
+        imgs_wh = self.img_wh(imgs_feat)
 
         # world feat
         H, W = self.Rworld_shape
@@ -252,12 +226,11 @@ class Custom(nn.Module):
                 visualize_img.save(os.path.join(logdir, f'imgs/projfeat{cam + 1}.png'))
                 # plt.imshow(visualize_img)
                 # plt.show()
-
-        world_feat = torch.cat([world_feat.view(B, N * C, H, W), self.coord_map.repeat([B, 1, 1, 1]).cuda()], 1)
-        world_feat = self.world_feat(world_feat)
+        world_feat = self.world_feat(world_feat, visualize=visualize)
 
         # world heads
         world_heatmap = self.world_heatmap(world_feat)
+        world_offset = self.world_offset(world_feat)
 
         if visualize:
             visualize_img = array2heatmap(torch.norm(world_feat[0].detach(), dim=0).cpu())
@@ -268,7 +241,7 @@ class Custom(nn.Module):
             visualize_img.save(os.path.join(logdir, f'imgs/worldres.png'))
             # plt.imshow(visualize_img)
             # plt.show()
-        return (world_heatmap, None), (imgs_heatmap, None, None)
+        return (world_heatmap, world_offset), (imgs_heatmap, imgs_offset, imgs_wh)
 
 
 def test():
@@ -281,7 +254,7 @@ def test():
     dataset = frameDataset(Wildtrack(os.path.expanduser('/workspace/Data/Wildtrack')), train=False, augmentation=False)
     create_reference_map(dataset, 4)
     dataloader = DataLoader(dataset, 1, False, num_workers=0)
-    model = Custom(dataset, world_feat_arch='deform_trans').cuda()
+    model = SHOT(dataset, world_feat_arch='deform_trans').cuda()
     # model.load_state_dict(torch.load(
     #     '../../logs/wildtrack/augFCS_deform_trans_lr0.001_baseR0.1_neck128_out64_alpha1.0_id0_drop0.5_dropcam0.0_worldRK4_10_imgRK12_10_2021-04-09_22-39-28/MultiviewDetector.pth'))
     imgs, world_gt, imgs_gt, affine_mats, frame = next(iter(dataloader))
