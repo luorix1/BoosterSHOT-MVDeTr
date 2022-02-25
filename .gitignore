@@ -128,3 +128,7 @@ dmypy.json
 imgs*
 .vscode/
 logs/*
+test_lr.py
+threshold_search.py
+check_gt.py
+multiview_detector/models/test.py
