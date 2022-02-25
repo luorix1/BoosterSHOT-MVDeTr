@@ -72,7 +72,7 @@ def create_reference_map(dataset, n_points=4, downsample=2, visualize=False):
     return ref_maps
 
 
-class BoosterSHOT(nn.Module):
+class ChannelSplit(nn.Module):
     def __init__(self, dataset, arch='resnet18', world_feat_arch='conv',
                  bottleneck_dim=128, outfeat_dim=64, dropout=0.5, depth_scales=4):
         super().__init__()
@@ -147,16 +147,7 @@ class BoosterSHOT(nn.Module):
         else:
             raise Exception
 
-        # SHOT Soft Selection Module
-        self.depth_classifier = nn.Sequential(nn.Conv2d(base_dim, 64, 1), nn.ReLU(),
-                                              nn.Conv2d(64, self.depth_scales, 1, bias=False))
-
         self.group_norm = nn.GroupNorm(self.depth_scales, base_dim)
-
-        self.feat_before_merge = nn.ModuleDict({
-            f'{i}': nn.Conv2d(base_dim, base_dim, 3, padding=1)
-            for i in range(self.depth_scales)
-        })
 
         self.feat_before_concat = nn.Conv2d(base_dim, base_dim, 3, groups=self.depth_scales, padding=1)
 
@@ -188,16 +179,6 @@ class BoosterSHOT(nn.Module):
             else:
                 warped_feat = torch.cat((warped_feat, out_feat), dim=1)
         warped_feat = self.feat_before_concat(warped_feat)
-
-        # SHOT
-        depth_select = self.depth_classifier(
-            img_feature_all).softmax(dim=1)  # [b*n,d,h,w]
-        for i in range(self.depth_scales):
-            in_feat = img_feature_all * depth_select[:, i][:, None]
-            out_feat = kornia.warp_perspective(
-                in_feat, proj_mats[i], self.Rworld_shape)
-            # [b*n,c,h,w]
-            warped_feat += self.feat_before_merge[f'{i}'](out_feat)
         
         return warped_feat
 
@@ -284,7 +265,7 @@ def test():
     dataset = frameDataset(Wildtrack(os.path.expanduser('/workspace/Data/Wildtrack')), train=False, augmentation=False)
     create_reference_map(dataset, 4)
     dataloader = DataLoader(dataset, 1, False, num_workers=0)
-    model = SHOT(dataset, world_feat_arch='deform_trans').cuda()
+    model = ChannelSplit(dataset, world_feat_arch='deform_trans').cuda()
     # model.load_state_dict(torch.load(
     #     '../../logs/wildtrack/augFCS_deform_trans_lr0.001_baseR0.1_neck128_out64_alpha1.0_id0_drop0.5_dropcam0.0_worldRK4_10_imgRK12_10_2021-04-09_22-39-28/MultiviewDetector.pth'))
     imgs, world_gt, imgs_gt, affine_mats, frame = next(iter(dataloader))

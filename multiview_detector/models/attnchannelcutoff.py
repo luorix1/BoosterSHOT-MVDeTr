@@ -10,7 +10,8 @@ import matplotlib.pyplot as plt
 from multiview_detector.models.resnet import resnet18
 from multiview_detector.utils.image_utils import img_color_denormalize, array2heatmap
 from multiview_detector.utils.projection import get_worldcoord_from_imgcoord_mat, project_2d_points
-from multiview_detector.models.attn_module import CBAM, ExpandedChannelGate, ExpandedSpatialGate
+from multiview_detector.models.attn_module import ChannelGate
+from multiview_detector.models.cutoff_module import CutoffModule
 from multiview_detector.models.conv_world_feat import ConvWorldFeat, DeformConvWorldFeat
 from multiview_detector.models.trans_world_feat import TransformerWorldFeat, DeformTransWorldFeat
 
@@ -72,13 +73,15 @@ def create_reference_map(dataset, n_points=4, downsample=2, visualize=False):
     return ref_maps
 
 
-class BoosterSHOT(nn.Module):
+class AttnChannelCutoff(nn.Module):
     def __init__(self, dataset, arch='resnet18', world_feat_arch='conv',
                  bottleneck_dim=128, outfeat_dim=64, dropout=0.5, depth_scales=4):
         super().__init__()
         self.Rimg_shape, self.Rworld_shape = dataset.Rimg_shape, dataset.Rworld_shape
         self.img_reduce = dataset.img_reduce
         self.depth_scales = depth_scales
+
+        self.num_cam = dataset.num_cam
 
         # world grid change to xy indexing
         world_zoom_mat = np.diag([dataset.world_reduce, dataset.world_reduce, 1])
@@ -132,6 +135,12 @@ class BoosterSHOT(nn.Module):
         self.img_offset = output_head(base_dim, outfeat_dim, 2)
         self.img_wh = output_head(base_dim, outfeat_dim, 2)
 
+        self.channel_attn = nn.ModuleDict({
+            f'{i}': ChannelGate(base_dim // self.depth_scales)
+            for i in range(self.depth_scales)
+        })
+        self.cutoff = CutoffModule(base_dim, self.depth_scales)
+
         # world feat
         if world_feat_arch == 'conv':
             self.world_feat = ConvWorldFeat(dataset.num_cam, dataset.Rworld_shape, base_dim)
@@ -146,17 +155,6 @@ class BoosterSHOT(nn.Module):
                                                    n_points=n_points, stride=2, reference_points=reference_points)
         else:
             raise Exception
-
-        # SHOT Soft Selection Module
-        self.depth_classifier = nn.Sequential(nn.Conv2d(base_dim, 64, 1), nn.ReLU(),
-                                              nn.Conv2d(64, self.depth_scales, 1, bias=False))
-
-        self.group_norm = nn.GroupNorm(self.depth_scales, base_dim)
-
-        self.feat_before_merge = nn.ModuleDict({
-            f'{i}': nn.Conv2d(base_dim, base_dim, 3, padding=1)
-            for i in range(self.depth_scales)
-        })
 
         self.feat_before_concat = nn.Conv2d(base_dim, base_dim, 3, groups=self.depth_scales, padding=1)
 
@@ -174,31 +172,19 @@ class BoosterSHOT(nn.Module):
         pass
 
     def warp_perspective(self, img_feature_all, proj_mats):
-        warped_feat = 0
-
-        # Channel-wise split
-        S = img_feature_all.shape[1] // self.depth_scales
-        group_norm_feat = self.group_norm(img_feature_all)
-        for i in range(self.depth_scales):
-            in_feat = group_norm_feat[:, i*S:(i+1)*S, :, :]
-            out_feat = kornia.warp_perspective(
-                in_feat, proj_mats[i], self.Rworld_shape)
-            if i == 0:
-                warped_feat = out_feat
-            else:
-                warped_feat = torch.cat((warped_feat, out_feat), dim=1)
-        warped_feat = self.feat_before_concat(warped_feat)
-
-        # SHOT
-        depth_select = self.depth_classifier(
-            img_feature_all).softmax(dim=1)  # [b*n,d,h,w]
-        for i in range(self.depth_scales):
-            in_feat = img_feature_all * depth_select[:, i][:, None]
-            out_feat = kornia.warp_perspective(
-                in_feat, proj_mats[i], self.Rworld_shape)
-            # [b*n,c,h,w]
-            warped_feat += self.feat_before_merge[f'{i}'](out_feat)
+        N, C, _, _ = img_feature_all.shape
+        warped_feat_list = []
+        block_size = C // self.depth_scales
+        in_feat = self.cutoff(img_feature_all)
         
+        for i in range(self.depth_scales):
+            feature_map = in_feat[:, block_size*i:block_size*(i+1), :, :]
+            feature_map = self.channel_attn[f'{i}'](feature_map)
+            out_feat = kornia.warp_perspective(
+                feature_map, proj_mats[i], self.Rworld_shape)
+            warped_feat_list.append(out_feat)
+        warped_feat = torch.cat(warped_feat_list, dim=1)
+        warped_feat = self.feat_before_concat(warped_feat)
         return warped_feat
 
     def forward(self, imgs, M, logdir=None, visualize=False):
@@ -284,7 +270,7 @@ def test():
     dataset = frameDataset(Wildtrack(os.path.expanduser('/workspace/Data/Wildtrack')), train=False, augmentation=False)
     create_reference_map(dataset, 4)
     dataloader = DataLoader(dataset, 1, False, num_workers=0)
-    model = SHOT(dataset, world_feat_arch='deform_trans').cuda()
+    model = ChannelCutoff(dataset, world_feat_arch='deform_trans').cuda()
     # model.load_state_dict(torch.load(
     #     '../../logs/wildtrack/augFCS_deform_trans_lr0.001_baseR0.1_neck128_out64_alpha1.0_id0_drop0.5_dropcam0.0_worldRK4_10_imgRK12_10_2021-04-09_22-39-28/MultiviewDetector.pth'))
     imgs, world_gt, imgs_gt, affine_mats, frame = next(iter(dataloader))

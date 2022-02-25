@@ -15,7 +15,11 @@ from torch import optim
 from torch.utils.data import DataLoader
 from multiview_detector.datasets import *
 from multiview_detector.models.mvdetr import MVDeTr
+# from multiview_detector.models.test import Test
 from multiview_detector.models.shot import SHOT
+from multiview_detector.models.attnchannelcutoff import AttnChannelCutoff
+from multiview_detector.models.channelcutoff import ChannelCutoff
+from multiview_detector.models.channelsplit import ChannelSplit
 from multiview_detector.models.cashot import CASHOT
 from multiview_detector.models.sashot import SASHOT
 from multiview_detector.models.cbamshot import CBAMSHOT
@@ -108,6 +112,18 @@ def main(args):
     if args.model == 'MVDeTr':
         model = MVDeTr(train_set, args.arch, world_feat_arch=args.world_feat,
                     bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout).cuda()
+    elif args.model == 'ChannelCutoff':
+        model = ChannelCutoff(train_set, args.arch, world_feat_arch=args.world_feat,
+                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
+    elif args.model == 'AttnChannelCutoff':
+        model = AttnChannelCutoff(train_set, args.arch, world_feat_arch=args.world_feat,
+                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
+    elif args.model == 'ChannelSplit':
+        model = ChannelSplit(train_set, args.arch, world_feat_arch=args.world_feat,
+                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
+    # elif args.model == 'Test':
+    #     model = Test(train_set, args.arch, world_feat_arch=args.world_feat,
+    #                 bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
     elif args.model == 'SHOT':
         model = SHOT(train_set, args.arch, world_feat_arch=args.world_feat,
                     bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
@@ -153,7 +169,8 @@ def main(args):
 
     # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, args.epochs)
     # scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, warmup_lr_scheduler)
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, steps_per_epoch=len(train_loader), epochs=args.epochs)
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, final_div_factor=args.final_div_factor, steps_per_epoch=len(train_loader), epochs=args.epochs)
+    # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, steps_per_epoch=len(train_loader), epochs=args.epochs)
 
     trainer = PerspectiveTrainer(model, logdir, args.cls_thres, args.alpha, args.use_mse, args.id_ratio, args.visualize)
 
@@ -201,12 +218,13 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--batch_size', type=int, default=1, help='input batch size for training')
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument('--dropcam', type=float, default=0.0)
-    parser.add_argument('--model', type=str, default='MVDeTr', choices=['MVDeTr', 'SHOT', 'CASHOT', 'SASHOT', 'CBAMSHOT', 'GLAMSHOT', 'BoosterSHOT', 'SoftBoosterSHOT'])
+    parser.add_argument('--model', type=str, default='MVDeTr', choices=['MVDeTr', 'ChannelCutoff', 'AttnChannelCutoff', 'ChannelSplit', 'SHOT', 'CASHOT', 'SASHOT', 'CBAMSHOT', 'GLAMSHOT', 'BoosterSHOT', 'SoftBoosterSHOT'])
     parser.add_argument('--optimizer', type=str, default='Adam', choices=['Adam', 'SGD'])
     parser.add_argument('--depth_scales', type=int, default=4)
     parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train')
     parser.add_argument('--lr', type=float, default=5e-4, help='learning rate')
     parser.add_argument('--base_lr_ratio', type=float, default=0.1)
+    parser.add_argument('--final_div_factor', type=float, default=1e4)
     parser.add_argument('--weight_decay', type=float, default=1e-4)
     parser.add_argument('--resume', type=str, default=None)
     parser.add_argument('--visualize', action='store_true')
