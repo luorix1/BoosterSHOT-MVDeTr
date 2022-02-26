@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from multiview_detector.models.resnet import resnet18
 from multiview_detector.utils.image_utils import img_color_denormalize, array2heatmap
 from multiview_detector.utils.projection import get_worldcoord_from_imgcoord_mat, project_2d_points
-from multiview_detector.models.attn_module import ChannelGate
+from multiview_detector.models.attn_module import ChannelGate, SpatialGate
 from multiview_detector.models.cutoff_module import CutoffModule
 from multiview_detector.models.conv_world_feat import ConvWorldFeat, DeformConvWorldFeat
 from multiview_detector.models.trans_world_feat import TransformerWorldFeat, DeformTransWorldFeat
@@ -135,8 +135,12 @@ class AttnChannelCutoff(nn.Module):
         self.img_offset = output_head(base_dim, outfeat_dim, 2)
         self.img_wh = output_head(base_dim, outfeat_dim, 2)
 
-        self.channel_attn = nn.ModuleDict({
-            f'{i}': ChannelGate(base_dim // self.depth_scales)
+        # self.channel_attn = nn.ModuleDict({
+        #     f'{i}': ChannelGate(base_dim // self.depth_scales)
+        #     for i in range(self.depth_scales)
+        # })
+        self.spatial_attn = nn.ModuleDict({
+            f'{i}': SpatialGate()
             for i in range(self.depth_scales)
         })
         self.cutoff = CutoffModule(base_dim, self.depth_scales)
@@ -179,7 +183,8 @@ class AttnChannelCutoff(nn.Module):
         
         for i in range(self.depth_scales):
             feature_map = in_feat[:, block_size*i:block_size*(i+1), :, :]
-            feature_map = self.channel_attn[f'{i}'](feature_map)
+            # feature_map = self.channel_attn[f'{i}'](feature_map)
+            feature_map = self.spatial_attn[f'{i}'](feature_map)
             out_feat = kornia.warp_perspective(
                 feature_map, proj_mats[i], self.Rworld_shape)
             warped_feat_list.append(out_feat)

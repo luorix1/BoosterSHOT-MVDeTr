@@ -15,7 +15,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from multiview_detector.datasets import *
 from multiview_detector.models.mvdetr import MVDeTr
-# from multiview_detector.models.test import Test
+from multiview_detector.models.test import Test
 from multiview_detector.models.shot import SHOT
 from multiview_detector.models.attnchannelcutoff import AttnChannelCutoff
 from multiview_detector.models.channelcutoff import ChannelCutoff
@@ -121,9 +121,9 @@ def main(args):
     elif args.model == 'ChannelSplit':
         model = ChannelSplit(train_set, args.arch, world_feat_arch=args.world_feat,
                     bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
-    # elif args.model == 'Test':
-    #     model = Test(train_set, args.arch, world_feat_arch=args.world_feat,
-    #                 bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
+    elif args.model == 'Test':
+        model = Test(train_set, args.arch, world_feat_arch=args.world_feat,
+                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
     elif args.model == 'SHOT':
         model = SHOT(train_set, args.arch, world_feat_arch=args.world_feat,
                     bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
@@ -218,7 +218,7 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--batch_size', type=int, default=1, help='input batch size for training')
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument('--dropcam', type=float, default=0.0)
-    parser.add_argument('--model', type=str, default='MVDeTr', choices=['MVDeTr', 'ChannelCutoff', 'AttnChannelCutoff', 'ChannelSplit', 'SHOT', 'CASHOT', 'SASHOT', 'CBAMSHOT', 'GLAMSHOT', 'BoosterSHOT', 'SoftBoosterSHOT'])
+    parser.add_argument('--model', type=str, default='MVDeTr', choices=['MVDeTr', 'Test', 'ChannelCutoff', 'AttnChannelCutoff', 'ChannelSplit', 'SHOT', 'CASHOT', 'SASHOT', 'CBAMSHOT', 'GLAMSHOT', 'BoosterSHOT', 'SoftBoosterSHOT'])
     parser.add_argument('--optimizer', type=str, default='Adam', choices=['Adam', 'SGD'])
     parser.add_argument('--depth_scales', type=int, default=4)
     parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train')
