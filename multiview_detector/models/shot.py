@@ -120,13 +120,15 @@ class SHOT(nn.Module):
             raise Exception('architecture currently support [vgg11, resnet18]')
 
         if bottleneck_dim:
-            self.bottleneck = nn.Sequential(nn.Conv2d(base_dim, bottleneck_dim, 3, padding=2, dilation=2), nn.ReLU(), nn.Conv2d(bottleneck_dim, bottleneck_dim, 3, padding=2, dilation=2))
+            # self.bottleneck = nn.Sequential(nn.Conv2d(base_dim, bottleneck_dim, 3, padding=2, dilation=2), nn.ReLU(), nn.Conv2d(bottleneck_dim, bottleneck_dim, 3, padding=2, dilation=2))
+            self.bottleneck = nn.Sequential(nn.Conv2d(base_dim, bottleneck_dim, 1), nn.Dropout2d(dropout))
             base_dim = bottleneck_dim
         else:
             self.bottleneck = nn.Identity()
 
         # img heads
-        self.img_heatmap = nn.Sequential(nn.Conv2d(base_dim, 64, 1), nn.ReLU(), nn.Conv2d(64, 1, 1, bias=False))
+        # self.img_heatmap = nn.Sequential(nn.Conv2d(base_dim, 64, 1), nn.ReLU(), nn.Conv2d(64, 1, 1, bias=False))
+        self.img_heatmap = output_head(base_dim, outfeat_dim, 1)
         self.img_offset = output_head(base_dim, outfeat_dim, 2)
         self.img_wh = output_head(base_dim, outfeat_dim, 2)
 
@@ -155,7 +157,8 @@ class SHOT(nn.Module):
         })
 
         # world heads
-        self.world_heatmap = nn.Conv2d(base_dim, 1, 3, padding=4, dilation=4, bias=False)
+        # self.world_heatmap = nn.Conv2d(base_dim, 1, 3, padding=4, dilation=4, bias=False)
+        self.world_heatmap = output_head(base_dim, outfeat_dim, 1)
         self.world_offset = output_head(base_dim, outfeat_dim, 2)
         pass
 
