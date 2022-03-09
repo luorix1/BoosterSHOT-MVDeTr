@@ -135,10 +135,10 @@ class AttnChannelCutoff(nn.Module):
         self.img_offset = output_head(base_dim, outfeat_dim, 2)
         self.img_wh = output_head(base_dim, outfeat_dim, 2)
 
-        # self.channel_attn = nn.ModuleDict({
-        #     f'{i}': ChannelGate(base_dim // self.depth_scales)
-        #     for i in range(self.depth_scales)
-        # })
+        self.channel_attn = nn.ModuleDict({
+            f'{i}': ChannelGate(base_dim // self.depth_scales)
+            for i in range(self.depth_scales)
+        })
         self.spatial_attn = nn.ModuleDict({
             f'{i}': SpatialGate()
             for i in range(self.depth_scales)
