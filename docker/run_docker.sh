@@ -2,7 +2,7 @@ docker run \
     -it --rm \
     --gpus all \
     --shm-size=32G \
-    --publish 29022:29022 \
+    --publish 30022:30022 \
     --volume /home/jinwoo/:/workspace/ \
-    --volume /data/:/workspace/Data/ \
+    --volume /old_home/datasets/Data/:/workspace/Data/ \
     jinwoo/research
