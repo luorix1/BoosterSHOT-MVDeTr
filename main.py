@@ -1,5 +1,7 @@
 import os
 
+from multiview_detector.datasets.DeepingSource import DeepingSource
+
 os.environ['OMP_NUM_THREADS'] = '1'
 import argparse
 import sys
@@ -16,16 +18,7 @@ from torch.utils.data import DataLoader
 from multiview_detector.datasets import *
 from multiview_detector.models.mvdetr import MVDeTr
 from multiview_detector.models.test import Test
-from multiview_detector.models.shot import SHOT
 from multiview_detector.models.attnchannelcutoff import AttnChannelCutoff
-from multiview_detector.models.channelcutoff import ChannelCutoff
-from multiview_detector.models.channelsplit import ChannelSplit
-from multiview_detector.models.cashot import CASHOT
-from multiview_detector.models.sashot import SASHOT
-from multiview_detector.models.cbamshot import CBAMSHOT
-from multiview_detector.models.glamshot import GLAMSHOT
-from multiview_detector.models.boostershot import BoosterSHOT
-from multiview_detector.models.softboostershot import SoftBoosterSHOT
 from multiview_detector.utils.logger import Logger
 from multiview_detector.utils.draw_curve import draw_curve
 from multiview_detector.utils.str2bool import str2bool
@@ -59,12 +52,14 @@ def main(args):
         torch.backends.cudnn.benchmark = True
 
     # dataset
-    if 'wildtrack' in args.dataset:
+    if 'deepingsource' in args.dataset:
+        base = DeepingSource(os.path.expanduser('/workspace/Data/DeepingSource'))
+    elif 'wildtrack' in args.dataset:
         base = Wildtrack(os.path.expanduser('/workspace/Data/Wildtrack'))
     elif 'multiviewx' in args.dataset:
         base = MultiviewX(os.path.expanduser('/workspace/Data/MultiviewX'))
     else:
-        raise Exception('must choose from [wildtrack, multiviewx]')
+        raise Exception('must choose from [deepingsource, wildtrack, multiviewx]')
     train_set = frameDataset(base, train=True, world_reduce=args.world_reduce,
                              img_reduce=args.img_reduce, world_kernel_size=args.world_kernel_size,
                              img_kernel_size=args.img_kernel_size, semi_supervised=args.semi_supervised,
@@ -112,38 +107,11 @@ def main(args):
     if args.model == 'MVDeTr':
         model = MVDeTr(train_set, args.arch, world_feat_arch=args.world_feat,
                     bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout).cuda()
-    elif args.model == 'ChannelCutoff':
-        model = ChannelCutoff(train_set, args.arch, world_feat_arch=args.world_feat,
-                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
     elif args.model == 'AttnChannelCutoff':
         model = AttnChannelCutoff(train_set, args.arch, world_feat_arch=args.world_feat,
                     bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
-    elif args.model == 'ChannelSplit':
-        model = ChannelSplit(train_set, args.arch, world_feat_arch=args.world_feat,
-                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
     elif args.model == 'Test':
         model = Test(train_set, args.arch, world_feat_arch=args.world_feat,
-                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
-    elif args.model == 'SHOT':
-        model = SHOT(train_set, args.arch, world_feat_arch=args.world_feat,
-                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
-    elif args.model == 'CASHOT':
-        model = CASHOT(train_set, args.arch, world_feat_arch=args.world_feat,
-                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
-    elif args.model == 'SASHOT':
-        model = SASHOT(train_set, args.arch, world_feat_arch=args.world_feat,
-                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
-    elif args.model == 'CBAMSHOT':
-        model = CBAMSHOT(train_set, args.arch, world_feat_arch=args.world_feat,
-                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
-    elif args.model == 'GLAMSHOT':
-        model = GLAMSHOT(train_set, args.arch, world_feat_arch=args.world_feat,
-                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
-    elif args.model == 'BoosterSHOT':
-        model = BoosterSHOT(train_set, args.arch, world_feat_arch=args.world_feat,
-                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
-    elif args.model == 'SoftBoosterSHOT':
-        model = BoosterSHOT(train_set, args.arch, world_feat_arch=args.world_feat,
                     bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
     else:
         raise Exception('The selected model is not supported.')
@@ -213,7 +181,7 @@ if __name__ == '__main__':
     parser.add_argument('--alpha', type=float, default=1.0, help='ratio for per view loss')
     parser.add_argument('--use_mse', type=str2bool, default=False)
     parser.add_argument('--arch', type=str, default='resnet18', choices=['vgg11', 'resnet18', 'mobilenet'])
-    parser.add_argument('-d', '--dataset', type=str, default='wildtrack', choices=['wildtrack', 'multiviewx'])
+    parser.add_argument('-d', '--dataset', type=str, default='deepingsource', choices=['wildtrack', 'multiviewx', 'deepingsource'])
     parser.add_argument('-j', '--num_workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=1, help='input batch size for training')
     parser.add_argument('--dropout', type=float, default=0.0)
@@ -232,9 +200,8 @@ if __name__ == '__main__':
     parser.add_argument('--deterministic', type=str2bool, default=False)
     parser.add_argument('--augmentation', type=str2bool, default=True)
 
-    parser.add_argument('--world_feat', type=str, default='deform_trans',
+    parser.add_argument('--world_feat', type=str, default='conv',
                         choices=['conv', 'trans', 'deform_conv', 'deform_trans', 'aio'])
-    # parser.add_argument('--variant', type=str, default='SHOT', choices=['SHOT', 'ChannelGate', 'SpatialGate', 'GLAM', 'CBAM', 'ChannelGroup'])
     parser.add_argument('--bottleneck_dim', type=int, default=128)
     parser.add_argument('--outfeat_dim', type=int, default=0)
     parser.add_argument('--world_reduce', type=int, default=4)
