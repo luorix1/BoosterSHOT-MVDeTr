@@ -1,6 +1,7 @@
 import os
 
-from multiview_detector.datasets.DeepingSource import DeepingSource
+from multiview_detector.datasets.Retail import Retail
+from multiview_detector.models.mvdetr_tracker import MVDeTrTracker
 
 os.environ['OMP_NUM_THREADS'] = '1'
 import argparse
@@ -17,7 +18,6 @@ from torch import optim
 from torch.utils.data import DataLoader
 from multiview_detector.datasets import *
 from multiview_detector.models.mvdetr import MVDeTr
-from multiview_detector.models.test import Test
 from multiview_detector.models.attnchannelcutoff import AttnChannelCutoff
 from multiview_detector.utils.logger import Logger
 from multiview_detector.utils.draw_curve import draw_curve
@@ -52,14 +52,14 @@ def main(args):
         torch.backends.cudnn.benchmark = True
 
     # dataset
-    if 'deepingsource' in args.dataset:
-        base = DeepingSource(os.path.expanduser('/workspace/Data/DeepingSource'))
+    if 'retail' in args.dataset:
+        base = Retail(os.path.expanduser('/workspace/Data/Retail'))
     elif 'wildtrack' in args.dataset:
         base = Wildtrack(os.path.expanduser('/workspace/Data/Wildtrack'))
     elif 'multiviewx' in args.dataset:
         base = MultiviewX(os.path.expanduser('/workspace/Data/MultiviewX'))
     else:
-        raise Exception('must choose from [deepingsource, wildtrack, multiviewx]')
+        raise Exception('must choose from [retail, wildtrack, multiviewx]')
     train_set = frameDataset(base, train=True, world_reduce=args.world_reduce,
                              img_reduce=args.img_reduce, world_kernel_size=args.world_kernel_size,
                              img_kernel_size=args.img_kernel_size, semi_supervised=args.semi_supervised,
@@ -104,17 +104,20 @@ def main(args):
     print(vars(args))
 
     # model
-    if args.model == 'MVDeTr':
-        model = MVDeTr(train_set, args.arch, world_feat_arch=args.world_feat,
-                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout).cuda()
-    elif args.model == 'AttnChannelCutoff':
-        model = AttnChannelCutoff(train_set, args.arch, world_feat_arch=args.world_feat,
-                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
-    elif args.model == 'Test':
-        model = Test(train_set, args.arch, world_feat_arch=args.world_feat,
-                    bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
-    else:
-        raise Exception('The selected model is not supported.')
+    if args.task == 'detection':
+        if args.model == 'MVDeTr':
+            model = MVDeTr(train_set, args.arch, world_feat_arch=args.world_feat,
+                        bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout).cuda()
+        elif args.model == 'AttnChannelCutoff':
+            model = AttnChannelCutoff(train_set, args.arch, world_feat_arch=args.world_feat,
+                        bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
+        else:
+            raise Exception('The selected model is not supported.')
+    elif args.task == 'tracking':
+        if args.model == 'MVDeTr':
+            model = MVDeTrTracker(train_set, args.arch, world_feat_arch=args.world_feat, bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
+        else:
+            raise Exception('The selected model is not supported.')
 
     param_dicts = [{"params": [p for n, p in model.named_parameters() if 'base' not in n and p.requires_grad], },
                    {"params": [p for n, p in model.named_parameters() if 'base' in n and p.requires_grad],
@@ -140,7 +143,7 @@ def main(args):
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, final_div_factor=args.final_div_factor, steps_per_epoch=len(train_loader), epochs=args.epochs)
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr, steps_per_epoch=len(train_loader), epochs=args.epochs)
 
-    trainer = PerspectiveTrainer(model, logdir, args.cls_thres, args.alpha, args.use_mse, args.id_ratio, args.visualize)
+    trainer = PerspectiveTrainer(model, logdir, args.task, args.cls_thres, args.alpha, args.use_mse, args.id_ratio, args.visualize)
 
     # draw curve
     x_epoch = []
@@ -174,6 +177,7 @@ def main(args):
 if __name__ == '__main__':
     # settings
     parser = argparse.ArgumentParser(description='Multiview detector')
+    parser.add_argument('--task', default='detection', choices=['detection', 'tracking'])
     parser.add_argument('--reID', action='store_true')
     parser.add_argument('--semi_supervised', type=float, default=0)
     parser.add_argument('--id_ratio', type=float, default=0)
@@ -181,12 +185,12 @@ if __name__ == '__main__':
     parser.add_argument('--alpha', type=float, default=1.0, help='ratio for per view loss')
     parser.add_argument('--use_mse', type=str2bool, default=False)
     parser.add_argument('--arch', type=str, default='resnet18', choices=['vgg11', 'resnet18', 'mobilenet'])
-    parser.add_argument('-d', '--dataset', type=str, default='deepingsource', choices=['wildtrack', 'multiviewx', 'deepingsource'])
+    parser.add_argument('-d', '--dataset', type=str, default='wildtrack', choices=['wildtrack', 'multiviewx', 'retail'])
     parser.add_argument('-j', '--num_workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=1, help='input batch size for training')
     parser.add_argument('--dropout', type=float, default=0.0)
     parser.add_argument('--dropcam', type=float, default=0.0)
-    parser.add_argument('--model', type=str, default='MVDeTr', choices=['MVDeTr', 'Test', 'ChannelCutoff', 'AttnChannelCutoff', 'ChannelSplit', 'SHOT', 'CASHOT', 'SASHOT', 'CBAMSHOT', 'GLAMSHOT', 'BoosterSHOT', 'SoftBoosterSHOT'])
+    parser.add_argument('--model', type=str, default='MVDeTr', choices=['MVDeTr', 'AttnChannelCutoff', 'SHOT'])
     parser.add_argument('--optimizer', type=str, default='Adam', choices=['Adam', 'SGD'])
     parser.add_argument('--depth_scales', type=int, default=4)
     parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train')
