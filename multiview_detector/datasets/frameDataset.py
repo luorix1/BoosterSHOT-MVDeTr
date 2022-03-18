@@ -50,7 +50,7 @@ class frameDataset(VisionDataset):
     def __init__(self, base, train=True, reID=False, world_reduce=4, img_reduce=12,
                  world_kernel_size=10, img_kernel_size=10,
                  train_ratio=0.9, top_k=100, force_download=True,
-                 semi_supervised=0.0, dropout=0.0, augmentation=False):
+                 semi_supervised=0.0, dropout=0.0, augmentation=False, task='detection'):
         super().__init__(base.root)
 
         self.base = base
@@ -66,6 +66,7 @@ class frameDataset(VisionDataset):
         self.transform = T.Compose([T.ToTensor(), T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
                                     T.Resize((np.array(self.img_shape) * 8 // self.img_reduce).tolist())])
         self.augmentation = augmentation
+        self.task = task
 
         self.Rworld_shape = list(map(lambda x: x // self.world_reduce, self.worldgrid_shape))
         self.Rimg_shape = np.ceil(np.array(self.img_shape) / self.img_reduce).astype(int).tolist()
@@ -168,7 +169,11 @@ class frameDataset(VisionDataset):
                 if not in_cam_range:
                     continue
                 grid_x, grid_y = self.base.get_worldgrid_from_pos(single_pedestrian['positionID']).squeeze()
-                og_gt.append(np.array([frame, grid_x, grid_y]))
+                if self.task == 'detection':
+                    og_gt.append(np.array([frame, grid_x, grid_y]))
+                elif self.task == 'tracking':
+                    pid = single_pedestrian['personID']
+                    og_gt.append(np.array([frame, pid, grid_x, grid_y]))
         og_gt = np.stack(og_gt, axis=0)
         os.makedirs(os.path.dirname(self.gt_fpath), exist_ok=True)
         np.savetxt(self.gt_fpath, og_gt, '%d')

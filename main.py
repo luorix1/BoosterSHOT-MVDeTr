@@ -63,10 +63,10 @@ def main(args):
     train_set = frameDataset(base, train=True, world_reduce=args.world_reduce,
                              img_reduce=args.img_reduce, world_kernel_size=args.world_kernel_size,
                              img_kernel_size=args.img_kernel_size, semi_supervised=args.semi_supervised,
-                             dropout=args.dropcam, augmentation=args.augmentation)
+                             dropout=args.dropcam, augmentation=args.augmentation, task=args.task)
     test_set = frameDataset(base, train=False, world_reduce=args.world_reduce,
                             img_reduce=args.img_reduce, world_kernel_size=args.world_kernel_size,
-                            img_kernel_size=args.img_kernel_size)
+                            img_kernel_size=args.img_kernel_size, task=args.task)
 
     def seed_worker(worker_id):
         worker_seed = torch.initial_seed() % 2 ** 32

@@ -20,13 +20,14 @@ class BaseTrainer(object):
 
 
 class PerspectiveTrainer(BaseTrainer):
-    def __init__(self, model, logdir, cls_thres=0.4, alpha=1.0, use_mse=False, id_ratio=0, visualize=False):
+    def __init__(self, model, logdir, task='detection', cls_thres=0.4, alpha=1.0, use_mse=False, id_ratio=0, visualize=False):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.mse_loss = nn.MSELoss()
         self.focal_loss = FocalLoss()
         self.regress_loss = RegL1Loss()
         self.ce_loss = RegCELoss()
+        self.task = task
         self.cls_thres = cls_thres
         self.logdir = logdir
         self.denormalize = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
@@ -158,10 +159,16 @@ class PerspectiveTrainer(BaseTrainer):
         if res_fpath is not None:
             res_list = torch.cat(res_list, dim=0).numpy() if res_list else np.empty([0, 3])
             np.savetxt(res_fpath, res_list, '%d')
-            recall, precision, moda, modp = evaluate(os.path.abspath(res_fpath),
-                                                     os.path.abspath(dataloader.dataset.gt_fpath),
-                                                     dataloader.dataset.base.__name__)
-            print(f'moda: {moda:.1f}%, modp: {modp:.1f}%, prec: {precision:.1f}%, recall: {recall:.1f}%')
+            if self.task == 'detection':
+                recall, precision, moda, modp = evaluate(self.task, os.path.abspath(res_fpath),
+                                                        os.path.abspath(dataloader.dataset.gt_fpath),
+                                                        dataloader.dataset.base.__name__)
+                print(f'moda: {moda:.1f}%, modp: {modp:.1f}%, prec: {precision:.1f}%, recall: {recall:.1f}%')
+            elif self.task == 'tracking':
+                f1, mota, motp = evaluate(self.task, os.path.abspath(res_fpath), os.path.abspath(dataloader.dataset.gt_fpath), dataloader.dataset)
+                print(f'mota: {mota}, motp: {motp}, F1" {f1}')
+            else:
+                raise Exception('Only tracking and detection are supported.')
         else:
             moda = 0
 

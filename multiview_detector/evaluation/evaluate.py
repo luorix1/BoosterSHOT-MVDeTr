@@ -3,6 +3,7 @@ import numpy as np
 
 # import matlab.engine
 from multiview_detector.evaluation.pyeval.evaluateDetection import evaluateDetection_py
+from multiview_detector.evaluation.TrackEval.evaluateTracking import evaluationTracking_py
 
 
 # def matlab_eval(res_fpath, gt_fpath, dataset='wildtrack'):
@@ -19,7 +20,7 @@ from multiview_detector.evaluation.pyeval.evaluateDetection import evaluateDetec
 
 # Removed Matlab evaluation block due to sporadic errors in line 23
 # TODO: Identify why failure to import matlab.engine sometimes triggers a ModuleNotFoundError
-def evaluate(res_fpath, gt_fpath, dataset='wildtrack'):
+def evaluate(task, res_fpath, gt_fpath, dataset='wildtrack'):
     # try:
     #     import matlab.engine
 
@@ -31,8 +32,14 @@ def evaluate(res_fpath, gt_fpath, dataset='wildtrack'):
     #     from multiview_detector.evaluation.pyeval.evaluateDetection import evaluateDetection_py
 
     #     recall, precision, moda, modp = evaluateDetection_py(res_fpath, gt_fpath, dataset)
-    recall, precision, moda, modp = evaluateDetection_py(res_fpath, gt_fpath, dataset)
-    return recall, precision, moda, modp
+    if task == 'detection':
+        recall, precision, moda, modp = evaluateDetection_py(res_fpath, gt_fpath, dataset)
+        return recall, precision, moda, modp
+    elif task == 'tracking':
+        f1, MOTA, MOTP = evaluationTracking_py(res_fpath, gt_fpath, dataset)
+        return f1, MOTA, MOTP
+    else:
+        raise Exception('Evaluation supported for detection and tracking tasks only.')
 
 
 if __name__ == "__main__":
