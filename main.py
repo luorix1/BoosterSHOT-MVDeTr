@@ -88,9 +88,7 @@ def main(args):
                  f'{datetime.datetime.today():%Y-%m-%d_%H-%M-%S}'
         os.makedirs(logdir, exist_ok=True)
         os.makedirs(os.path.join(logdir, 'imgs'), exist_ok=True)
-        if args.model == 'ABCDet':
-            for i in range(args.depth_scales):
-                os.makedirs(os.path.join(logdir, f'imgs/{i+1}'), exist_ok=True)
+        shutil.copyfile(train_set.gt_fpath, os.path.join(logdir, 'gt.txt'))
         copy_tree('./multiview_detector', logdir + '/scripts/multiview_detector')
         for script in os.listdir('.'):
             if script.split('.')[-1] == 'py':

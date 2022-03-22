@@ -96,7 +96,7 @@ class _BaseDataset(ABC):
         # Calculate similarities for each timestep.
         similarity_scores = []
         for t, (gt_dets_t, tracker_dets_t) in enumerate(zip(raw_data['gt_dets'], raw_data['tracker_dets'])):
-            ious = self._calculate_similarities(gt_dets_t, tracker_dets_t)
+            ious = self._calculate_similarities(gt_dets_t.astype(np.float), tracker_dets_t.astype(np.float))
             similarity_scores.append(ious)
         raw_data['similarity_scores'] = similarity_scores
         return raw_data
@@ -251,6 +251,7 @@ class _BaseDataset(ABC):
         If do_ioa (intersection over area) , then calculates the intersection over the area of boxes1 - this is commonly
         used to determine if detections are within crowd ignore region.
         """
+        assert bboxes1.dtype == np.float and bboxes2.dtype == np.float
         if box_format in 'xywh':
             # layout: (x0, y0, w, h)
             bboxes1 = deepcopy(bboxes1)

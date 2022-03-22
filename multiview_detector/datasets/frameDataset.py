@@ -173,7 +173,7 @@ class frameDataset(VisionDataset):
                     og_gt.append(np.array([frame, grid_x, grid_y]))
                 elif self.task == 'tracking':
                     pid = single_pedestrian['personID']
-                    og_gt.append(np.array([frame, pid, grid_x, grid_y]))
+                    og_gt.append(np.array([frame, pid, grid_x-1, grid_y-1, grid_x+1, grid_y+1, 1, -1, -1, -1]))
         og_gt = np.stack(og_gt, axis=0)
         os.makedirs(os.path.dirname(self.gt_fpath), exist_ok=True)
         np.savetxt(self.gt_fpath, og_gt, '%d')
