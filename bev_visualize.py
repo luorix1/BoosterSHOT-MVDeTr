@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from multiview_detector.datasets import *
+from multiview_detector.utils.image_utils import draw_umich_gaussian
 
 def bev_visualize(args):
     if 'wildtrack' in args.dataset:
@@ -37,39 +38,49 @@ def bev_visualize(args):
     for batch_idx, (data, world_gt, imgs_gt, affine_mats, frame) in enumerate(dataloader):
         print(f'Processing batch {batch_idx + 1}')
 
-        if batch_idx >= 3:
-            break
-        else:
-            gt_t = gtRaw[gtRaw[:,0] == batch_idx + 1, :]
-            det_t = detRaw[detRaw[:,0] == batch_idx + 1, :]
+        gt_t = gtRaw[gtRaw[:,0] == batch_idx + 1, :]
+        det_t = detRaw[detRaw[:,0] == batch_idx + 1, :]
+        
+        shape = world_gt['heatmap'].squeeze().numpy().shape
+        gt_map = np.zeros(shape)
+        det_map = np.zeros(shape)
+        gt_pid_list = []
+        det_pid_list = []
+
+        fig = plt.figure()
+        fig.set_size_inches(36, 10)
+
+        subplt1 = fig.add_subplot(121)
+        subplt2 = fig.add_subplot(122)
+        subplt1.set_xticks([])
+        subplt1.set_yticks([])
+        subplt2.set_xticks([])
+        subplt2.set_yticks([])
+
+        for gtRow, detRow in zip(gt_t, det_t):
+            # For now, don't apply Hungarian Algorithm and just show the PIDs for each (will fix later)
+            gt_x = (gtRow[2] + gtRow[4]) / 2 / args.world_reduce
+            gt_y = (gtRow[3] + gtRow[5]) / 2 / args.world_reduce
+            gt_map[int(gt_x)][int(gt_y)] = 1
+            gt_pid_list.append([int(gt_x), int(gt_y), int(gtRow[1])])
+
+            det_x = (detRow[2] + detRow[4]) / 2 / args.world_reduce
+            det_y = (detRow[3] + detRow[5]) / 2 / args.world_reduce
+            # det_map[int(det_x)][int(det_y)] = 1
+            draw_umich_gaussian(det_map, (int(det_y), int(det_x)), 2.5)
+            det_pid_list.append([int(det_x), int(det_y), int(detRow[1])])
             
-            shape = world_gt['heatmap'].squeeze().numpy().shape
-            gt_map = np.zeros(shape)
-            det_map = np.zeros(shape)
-            for gtRow, detRow in zip(gt_t, det_t):
-                # For now, don't apply Hungarian Algorithm and just show the PIDs for each (will fix later)
-                gt_x = (gtRow[2] + gtRow[4]) / 2 / args.world_reduce
-                gt_y = (gtRow[3] + gtRow[5]) / 2 / args.world_reduce
-                gt_map[int(gt_x)][int(gt_y)] = 1
-                
-                det_x = (detRow[2] + detRow[4]) / 2 / args.world_reduce
-                det_y = (detRow[3] + detRow[5]) / 2 / args.world_reduce
-                det_map[int(det_x)][int(det_y)] = 1
+        for pid in det_pid_list:
+            subplt1.annotate(pid[2], xy=(pid[1], pid[0]), xytext=( -14,  -10), textcoords='offset pixels', fontsize=20)
+        subplt1.imshow(det_map)
 
-                fig = plt.figure()
-                subplt1 = fig.add_subplot(121)
-                subplt2 = fig.add_subplot(122)
-                subplt1.set_xticks([])
-                subplt1.set_yticks([])
-                subplt2.set_xticks([])
-                subplt2.set_yticks([])
+        for pid in gt_pid_list:
+            subplt2.annotate(pid[2], xy=(pid[1], pid[0]), xytext=( -14,  -10), textcoords='offset pixels', fontsize=20)
+        subplt2.imshow(world_gt['heatmap'].squeeze().numpy())
 
-                subplt1.imshow(det_map)
-                subplt2.imshow(world_gt['heatmap'].squeeze().numpy())
-
-                plt.savefig(f'/workspace/MVDeTr_research/output/diagram_{batch_idx + 1}.png')
-                
-
+        # plt.subplots_adjust(wspace=0.3, hspace=0.05, top=0.9, bottom=0.1, left=0.1, right=0.9)
+        plt.tight_layout()
+        plt.savefig(f'/workspace/MVDeTr_research/output/{(batch_idx + 1):08}.png')
 
 
 if __name__ == '__main__':
