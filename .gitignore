@@ -128,10 +128,12 @@ dmypy.json
 imgs*
 .vscode/
 logs/*
+tracker_logs/*
 test_lr.py
 threshold_search.py
 check_gt.py
 multiview_detector/evaluation/TrackEval/data
 multiview_detector/models/test.py
+multiview_detector/trackers/StrongSORT/data
 output/
 docker/.*
