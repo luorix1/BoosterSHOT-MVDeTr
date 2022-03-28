@@ -113,7 +113,11 @@ def main(args):
             raise Exception('The selected model is not supported.')
     elif args.task == 'tracking':
         if args.model == 'MVDeTr':
-            model = MVDeTrTracker(train_set, args.arch, world_feat_arch=args.world_feat, bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
+            model = MVDeTr(train_set, args.arch, world_feat_arch=args.world_feat,
+                        bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout).cuda()
+        elif args.model == 'AttnChannelCutoff':
+            model = AttnChannelCutoff(train_set, args.arch, world_feat_arch=args.world_feat,
+                        bottleneck_dim=args.bottleneck_dim, outfeat_dim=args.outfeat_dim, dropout=args.dropout, depth_scales=args.depth_scales).cuda()
         else:
             raise Exception('The selected model is not supported.')
 
