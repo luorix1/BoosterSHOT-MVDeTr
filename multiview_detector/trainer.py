@@ -134,7 +134,13 @@ class PerspectiveTrainer(BaseTrainer):
                     pos, s = positions[b, ids], scores[b, ids, 0]
                     res = torch.cat([torch.ones([len(s), 1]) * frame[b], pos], dim=1)
                     ids, count = nms(pos, s, 20, np.inf)
-                    res = torch.cat([torch.ones([count, 1]) * frame[b], pos[ids[:count]]], dim=1)
+                    if self.task == 'detection':
+                        res = torch.cat([torch.ones([count, 1]) * frame[b], pos[ids[:count]]], dim=1)
+                    elif self.task == 'tracking':
+                        res = torch.cat([torch.ones([count, 1]) * frame[b], -torch.ones([count, 1]), pos[ids[:count]] - torch.ones([count, 1]), pos[ids[:count]] + torch.ones([count, 1]), torch.ones([count, 1]), -torch.ones([count, 3
+                        ])], dim=1)
+                    else:
+                        raise Exception('Only detection and tracking are supported.')
                     res_list.append(res)
 
         t1 = time.time()
