@@ -22,8 +22,9 @@ if __name__ == '__main__':
         print('processing the {}th video {}...'.format(i, seq))
         path_save = join(opt.dir_save, seq + '.txt')
         run(
-            sequence_dir=join(opt.dir_dataset, seq),
-            detection_file=join(opt.dir_dets, seq + '.npy'),
+            sequence_dir=opt.dir_dataset,
+            detection_file=opt.res_fpath,
+            gt_file=opt.gt_fpath,
             output_file=path_save,
             min_confidence=opt.min_confidence,
             nms_max_overlap=opt.nms_max_overlap,

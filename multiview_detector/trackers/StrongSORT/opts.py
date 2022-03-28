@@ -21,13 +21,7 @@ data = {
             'MOT17-13-FRCNN'
         ],
         'test':[
-            'MOT17-01-FRCNN',
-            'MOT17-03-FRCNN',
-            'MOT17-06-FRCNN',
-            'MOT17-07-FRCNN',
-            'MOT17-08-FRCNN',
-            'MOT17-12-FRCNN',
-            'MOT17-14-FRCNN'
+            'data'
         ]
     },
     'MOT20': {
@@ -37,7 +31,7 @@ data = {
             'MOT20-07',
             'MOT20-08'
         ]
-    }
+    },
 }
 
 class opts:
@@ -94,16 +88,16 @@ class opts:
             help='Gaussian-smoothed Interpolation'
         )
         self.parser.add_argument(
-            '--root_dataset',
-            default='/data/dyh/data/MOTChallenge'
+            '--dir_dataset',
+            default='/workspace/MVDeTr_research/bev'
         )
         self.parser.add_argument(
             '--path_AFLink',
-            default='/data/dyh/results/StrongSORT_Git/AFLink_epoch20.pth'
+            default='/workspace/MVDeTr_research/multiview_detector/trackers/StrongSORT/data/AFLink_epoch20.pth'
         )
         self.parser.add_argument(
             '--dir_save',
-            default='/data/dyh/results/StrongSORT_Git/tmp'
+            default='/workspace/MVDeTr_research/tracker_logs'
         )
         self.parser.add_argument(
             '--EMA_alpha',
@@ -112,6 +106,14 @@ class opts:
         self.parser.add_argument(
             '--MC_lambda',
             default=0.98
+        )
+        self.parser.add_argument(
+            '--res_fpath',
+            default='/workspace/MVDeTr_research/multiview_detector/evaluation/TrackEval/data/trackers/deeping_source/MOT17-train/MPNTrack/data/data.txt'
+        )
+        self.parser.add_argument(
+            '--gt_fpath',
+            default='/workspace/MVDeTr_research/multiview_detector/evaluation/TrackEval/data/gt/deeping_source/MOT17-train/data/gt/gt.txt'
         )
 
     def parse(self, args=''):
@@ -122,12 +124,11 @@ class opts:
         opt.min_confidence = 0.6
         opt.nms_max_overlap = 1.0
         opt.min_detection_height = 0
+        opt.dir_dets = '/workspace/MVDeTr_research/multiview_detector/trackers/StrongSORT/data'
         if opt.BoT:
             opt.max_cosine_distance = 0.4
-            opt.dir_dets = '/data/dyh/results/StrongSORT_Git/{}_{}_YOLOX+BoT'.format(opt.dataset, opt.mode)
         else:
             opt.max_cosine_distance = 0.3
-            opt.dir_dets = '/data/dyh/results/StrongSORT_Git/{}_{}_YOLOX+simpleCNN'.format(opt.dataset, opt.mode)
         if opt.MC:
             opt.max_cosine_distance += 0.05
         if opt.EMA:
@@ -135,14 +136,9 @@ class opts:
         else:
             opt.nn_budget = 100
         if opt.ECC:
-            path_ECC = '/data/dyh/results/StrongSORT_Git/{}_ECC_{}.json'.format(opt.dataset, opt.mode)
+            path_ECC = '/workspace/MVDeTr_research/multiview_detector/trackers/StrongSORT/data/{}_ECC_{}.json'.format(opt.dataset, opt.mode)
             opt.ecc = json.load(open(path_ECC))
         opt.sequences = data[opt.dataset][opt.mode]
-        opt.dir_dataset = join(
-            opt.root_dataset,
-            opt.dataset,
-            'train' if opt.mode == 'val' else 'test'
-        )
         return opt
 
 opt = opts().parse()

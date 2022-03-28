@@ -15,7 +15,7 @@ from deep_sort.tracker import Tracker
 from opts import opt
 
 
-def gather_sequence_info(sequence_dir, detection_file):
+def gather_sequence_info(sequence_dir, detection_file, gt_file):
     """Gather sequence information, such as image filenames, detections,
     groundtruth (if available).
 
@@ -25,6 +25,8 @@ def gather_sequence_info(sequence_dir, detection_file):
         Path to the MOTChallenge sequence directory.
     detection_file : str
         Path to the detection file.
+    gt_file: str
+        Path to the ground truth file.
 
     Returns
     -------
@@ -41,18 +43,16 @@ def gather_sequence_info(sequence_dir, detection_file):
         * max_frame_idx: Index of the last frame.
 
     """
-    image_dir = os.path.join(sequence_dir, "img1")
+    image_dir = sequence_dir
     image_filenames = {
         int(os.path.splitext(f)[0]): os.path.join(image_dir, f)
         for f in os.listdir(image_dir)}
-    groundtruth_file = os.path.join(sequence_dir, "gt/gt.txt")
-
     detections = None
     if detection_file is not None:
-        detections = np.load(detection_file)
+        detections = np.loadtxt(detection_file)
     groundtruth = None
-    if os.path.exists(groundtruth_file):
-        groundtruth = np.loadtxt(groundtruth_file, delimiter=',')
+    if os.path.isfile(gt_file):
+        groundtruth = np.loadtxt(gt_file)
 
     if len(image_filenames) > 0:
         image = cv2.imread(next(iter(image_filenames.values())),
@@ -127,7 +127,7 @@ def create_detections(detection_mat, frame_idx, min_height=0):
     return detection_list
 
 
-def run(sequence_dir, detection_file, output_file, min_confidence,
+def run(sequence_dir, detection_file, gt_file, output_file, min_confidence,
         nms_max_overlap, min_detection_height, max_cosine_distance,
         nn_budget, display):
     """Run multi-target tracker on a particular sequence.
@@ -136,11 +136,11 @@ def run(sequence_dir, detection_file, output_file, min_confidence,
     ----------
     sequence_dir : str
         Path to the MOTChallenge sequence directory.
-    detection_file : str
-        Path to the detections file.
     output_file : str
         Path to the tracking output file. This file will contain the tracking
         results on completion.
+    gt_file : str
+        Path to the ground truth file.
     min_confidence : float
         Detection confidence threshold. Disregard all detections that have
         a confidence lower than this value.
@@ -158,7 +158,7 @@ def run(sequence_dir, detection_file, output_file, min_confidence,
         If True, show visualization of intermediate tracking results.
 
     """
-    seq_info = gather_sequence_info(sequence_dir, detection_file)
+    seq_info = gather_sequence_info(sequence_dir, detection_file, gt_file)
     metric = nn_matching.NearestNeighborDistanceMetric(
         'cosine',
         max_cosine_distance,
