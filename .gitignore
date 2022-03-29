@@ -137,3 +137,4 @@ multiview_detector/models/test.py
 multiview_detector/trackers/StrongSORT/data
 output/
 docker/.*
+bev/
