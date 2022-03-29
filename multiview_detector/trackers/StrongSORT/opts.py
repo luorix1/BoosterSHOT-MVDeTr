@@ -97,7 +97,7 @@ class opts:
         )
         self.parser.add_argument(
             '--dir_save',
-            default='/workspace/MVDeTr_research/tracker_logs'
+            default='/workspace/MVDeTr_research/multiview_detector/trackers/StrongSORT/data'
         )
         self.parser.add_argument(
             '--EMA_alpha',

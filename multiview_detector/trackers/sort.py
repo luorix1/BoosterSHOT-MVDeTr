@@ -254,7 +254,7 @@ def parse_args():
     """Parse input arguments."""
     parser = argparse.ArgumentParser(description='SORT demo')
     parser.add_argument('--display', dest='display', help='Display online tracker output (slow) [False]',action='store_true')
-    parser.add_argument("--seq_path", help="Path to detections.", type=str, default='logs')
+    parser.add_argument("--seq_path", help="Path to detections.", type=str, default='/workspace/MVDeTr_research/logs')
     parser.add_argument("--phase", help="Subdirectory in seq_path.", type=str, default='wildtrack')
     parser.add_argument("--max_age", 
                         help="Maximum number of frames to keep alive a track without associated detections.", 
