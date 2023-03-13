@@ -8,7 +8,7 @@ class Logger(object):
         self.file = None
         if fpath is not None:
             os.makedirs(os.path.dirname(fpath), exist_ok=True)
-            self.file = open(fpath, 'w')
+            self.file = open(fpath, "w")
 
     def __del__(self):
         self.close()

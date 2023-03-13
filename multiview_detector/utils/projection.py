@@ -6,7 +6,9 @@ def project_2d_points(project_mat, input_points):
     if input_points.shape[1] == 2:
         vertical_flag = 1
         input_points = np.transpose(input_points)
-    input_points = np.concatenate([input_points, np.ones([1, input_points.shape[1]])], axis=0)
+    input_points = np.concatenate(
+        [input_points, np.ones([1, input_points.shape[1]])], axis=0
+    )
     output_points = project_mat @ input_points
     output_points = output_points[:2, :] / output_points[2, :]
     if vertical_flag:
@@ -39,5 +41,7 @@ def get_worldcoord_from_imgcoord_mat(intrinsic_mat, extrinsic_mat, z=0):
     world of shape N_row, N_col; indexed as specified in the dataset attribute (xy or ij)
     z in meters by default
     """
-    project_mat = np.linalg.inv(get_imgcoord_from_worldcoord_mat(intrinsic_mat, extrinsic_mat, z))
+    project_mat = np.linalg.inv(
+        get_imgcoord_from_worldcoord_mat(intrinsic_mat, extrinsic_mat, z)
+    )
     return project_mat

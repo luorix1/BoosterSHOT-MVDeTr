@@ -1,10 +1,10 @@
 import numpy as np
 
-
 # import matlab.engine
-from multiview_detector.evaluation.pyeval.evaluateDetection import evaluateDetection_py
-from multiview_detector.evaluation.TrackEval.evaluateTracking import evaluationTracking_py
-
+from multiview_detector.evaluation.pyeval.evaluateDetection import \
+    evaluateDetection_py
+from multiview_detector.evaluation.TrackEval.evaluateTracking import \
+    evaluationTracking_py
 
 # def matlab_eval(res_fpath, gt_fpath, dataset='wildtrack'):
 #     eng = matlab.engine.start_matlab()
@@ -20,7 +20,7 @@ from multiview_detector.evaluation.TrackEval.evaluateTracking import evaluationT
 
 # Removed Matlab evaluation block due to sporadic errors in line 23
 # TODO: Identify why failure to import matlab.engine sometimes triggers a ModuleNotFoundError
-def evaluate(task, res_fpath, gt_fpath, dataset='wildtrack'):
+def evaluate(task, res_fpath, gt_fpath, dataset="wildtrack"):
     # try:
     #     import matlab.engine
 
@@ -32,28 +32,32 @@ def evaluate(task, res_fpath, gt_fpath, dataset='wildtrack'):
     #     from multiview_detector.evaluation.pyeval.evaluateDetection import evaluateDetection_py
 
     #     recall, precision, moda, modp = evaluateDetection_py(res_fpath, gt_fpath, dataset)
-    if task == 'detection':
-        recall, precision, moda, modp = evaluateDetection_py(res_fpath, gt_fpath, dataset)
+    if task == "detection":
+        recall, precision, moda, modp = evaluateDetection_py(
+            res_fpath, gt_fpath, dataset
+        )
         return recall, precision, moda, modp
-    elif task == 'tracking':
+    elif task == "tracking":
         f1, MOTA, MOTP = evaluationTracking_py(res_fpath, gt_fpath, dataset)
         return f1, MOTA, MOTP
     else:
-        raise Exception('Evaluation supported for detection and tracking tasks only.')
+        raise Exception("Evaluation supported for detection and tracking tasks only.")
 
 
 if __name__ == "__main__":
     import os
 
-    res_fpath = os.path.abspath('test-demo.txt')
-    gt_fpath = os.path.abspath('gt-demo.txt')
-    os.chdir('../..')
-    print(os.path.abspath('.'))
+    res_fpath = os.path.abspath("test-demo.txt")
+    gt_fpath = os.path.abspath("gt-demo.txt")
+    os.chdir("../..")
+    print(os.path.abspath("."))
 
     # recall, precision, moda, modp = matlab_eval(res_fpath, gt_fpath, 'Wildtrack')
     # print(f'matlab eval: MODA {moda:.1f}, MODP {modp:.1f}, prec {precision:.1f}, rcll {recall:.1f}')
     # recall, precision, moda, modp = python_eval(res_fpath, gt_fpath, 'Wildtrack')
     # print(f'python eval: MODA {moda:.1f}, MODP {modp:.1f}, prec {precision:.1f}, rcll {recall:.1f}')
 
-    recall, precision, moda, modp = evaluate(res_fpath, gt_fpath, 'Wildtrack')
-    print(f'eval: MODA {moda:.1f}, MODP {modp:.1f}, prec {precision:.1f}, rcll {recall:.1f}')
+    recall, precision, moda, modp = evaluate(res_fpath, gt_fpath, "Wildtrack")
+    print(
+        f"eval: MODA {moda:.1f}, MODP {modp:.1f}, prec {precision:.1f}, rcll {recall:.1f}"
+    )

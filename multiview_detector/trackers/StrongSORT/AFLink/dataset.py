@@ -5,38 +5,40 @@
 @Time: 2021/12/28 9:24
 @Discription: dataset
 """
-import torch
-import numpy as np
 from os.path import join
-from random import randint, normalvariate
-from torch.utils.data import Dataset, DataLoader
+from random import normalvariate, randint
 
 import AFLink.config as cfg
+import numpy as np
+import torch
+from torch.utils.data import DataLoader, Dataset
 
 SEQ = {
-    'train': [
-        'MOT17-02-FRCNN',
-        'MOT17-04-FRCNN',
-        'MOT17-05-FRCNN',
-        'MOT17-09-FRCNN',
-        'MOT17-10-FRCNN',
-        'MOT17-11-FRCNN',
-        'MOT17-13-FRCNN'
+    "train": [
+        "MOT17-02-FRCNN",
+        "MOT17-04-FRCNN",
+        "MOT17-05-FRCNN",
+        "MOT17-09-FRCNN",
+        "MOT17-10-FRCNN",
+        "MOT17-11-FRCNN",
+        "MOT17-13-FRCNN",
     ],
-    'test': [
-        'MOT17-01-FRCNN',
-        'MOT17-03-FRCNN',
-        'MOT17-06-FRCNN',
-        'MOT17-07-FRCNN',
-        'MOT17-08-FRCNN',
-        'MOT17-12-FRCNN',
-        'MOT17-14-FRCNN'
-    ]
+    "test": [
+        "MOT17-01-FRCNN",
+        "MOT17-03-FRCNN",
+        "MOT17-06-FRCNN",
+        "MOT17-07-FRCNN",
+        "MOT17-08-FRCNN",
+        "MOT17-12-FRCNN",
+        "MOT17-14-FRCNN",
+    ],
 }
 
 
 class LinkData(Dataset):
-    def __init__(self, root, mode='train', minLen=cfg.model_minLen, inputLen=cfg.model_inputLen):
+    def __init__(
+        self, root, mode="train", minLen=cfg.model_minLen, inputLen=cfg.model_inputLen
+    ):
         """
         :param minLen: 仅考虑长度超过该阈值的GT轨迹
         :param inputLen: 网络输入轨迹长度
@@ -44,7 +46,7 @@ class LinkData(Dataset):
         self.minLen = minLen
         self.inputLen = inputLen
         if root:
-            assert mode in ('train', 'val')
+            assert mode in ("train", "val")
             self.root = root
             self.mode = mode
             self.id2info = self.initialize()
@@ -52,10 +54,12 @@ class LinkData(Dataset):
 
     def initialize(self):
         id2info = dict()
-        for seqid, seq in enumerate(SEQ['train'], start=1):
-            path_gt = join(self.root, '{}/gt/gt_{}_half.txt'.format(seq, self.mode))
-            gts = np.loadtxt(path_gt, delimiter=',')
-            gts = gts[(gts[:, 6] == 1) * (gts[:, 7] == 1)]  # 仅考虑“considered" & "pedestrian"
+        for seqid, seq in enumerate(SEQ["train"], start=1):
+            path_gt = join(self.root, "{}/gt/gt_{}_half.txt".format(seq, self.mode))
+            gts = np.loadtxt(path_gt, delimiter=",")
+            gts = gts[
+                (gts[:, 6] == 1) * (gts[:, 7] == 1)
+            ]  # 仅考虑“considered" & "pedestrian"
             ids = set(gts[:, 1])
             for objid in ids:
                 id_ = objid + seqid * 1e5
@@ -73,9 +77,9 @@ class LinkData(Dataset):
         lengthX, widthX = x.shape
         if lengthX >= self.inputLen:
             if former:
-                x = x[-self.inputLen:]
+                x = x[-self.inputLen :]
             else:
-                x = x[:self.inputLen]
+                x = x[: self.inputLen]
         else:
             zeros = np.zeros((self.inputLen - lengthX, widthX))
             if former:
@@ -106,11 +110,11 @@ class LinkData(Dataset):
     def __getitem__(self, item):
         info = self.id2info[self.ids[item]]
         numFrames = info.shape[0]
-        if self.mode == 'train':
-            idxCut = randint(self.minLen//3, numFrames - self.minLen//3)  # 随机裁剪点
+        if self.mode == "train":
+            idxCut = randint(self.minLen // 3, numFrames - self.minLen // 3)  # 随机裁剪点
             # 样本对儿
-            info1 = info[:idxCut + int(normalvariate(-5, 3))]  # 为索引添加随机偏差
-            info2 = info[idxCut + int(normalvariate(5, 3)):]   # 为索引添加随机偏差
+            info1 = info[: idxCut + int(normalvariate(-5, 3))]  # 为索引添加随机偏差
+            info2 = info[idxCut + int(normalvariate(5, 3)) :]  # 为索引添加随机偏差
             # 时域扰动
             info2_t = info2.copy()
             info2_t[:, 0] += (-1) ** randint(1, 2) * randint(30, 100)
@@ -131,27 +135,22 @@ class LinkData(Dataset):
             info2_s[:, 1] += (-1) ** idxCut * 300
             info2_s[:, 2] += (-1) ** idxCut * 300
         # 返回正负样本对儿
-        return self.transform(info1, info2), \
-               self.transform(info2, info1), \
-               self.transform(info1, info2_t), \
-               self.transform(info1, info2_s), \
-               (1, 0, 0, 0)
+        return (
+            self.transform(info1, info2),
+            self.transform(info2, info1),
+            self.transform(info1, info2_t),
+            self.transform(info1, info2_s),
+            (1, 0, 0, 0),
+        )
 
     def __len__(self):
         return len(self.ids)
 
 
-if __name__ == '__main__':
-    dataset = LinkData(
-        root='/data/dyh/data/MOTChallenge/MOT17/train',
-        mode='train'
-    )
+if __name__ == "__main__":
+    dataset = LinkData(root="/data/dyh/data/MOTChallenge/MOT17/train", mode="train")
     dataloader = DataLoader(
-        dataset=dataset,
-        batch_size=2,
-        shuffle=True,
-        num_workers=1,
-        drop_last=False
+        dataset=dataset, batch_size=2, shuffle=True, num_workers=1, drop_last=False
     )
     print(len(dataset))
     print(len(dataloader))

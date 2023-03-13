@@ -1,17 +1,21 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from multiview_detector.utils.tensor_utils import _gather_feat, _transpose_and_gather_feat
+
+from multiview_detector.utils.tensor_utils import (_gather_feat,
+                                                   _transpose_and_gather_feat)
 
 
 def _nms(heatmap, kernel_size=3):
     # kernel_size = kernel_size * 2 + 1
-    hmax = F.max_pool2d(heatmap, (kernel_size, kernel_size), stride=1, padding=(kernel_size - 1) // 2)
+    hmax = F.max_pool2d(
+        heatmap, (kernel_size, kernel_size), stride=1, padding=(kernel_size - 1) // 2
+    )
     keep = (hmax == heatmap).float()
     return heatmap * keep
 
 
-'''
+"""
 # Slow for large number of categories
 def _topk(scores, K=40):
     batch, cat, height, width = scores.size()
@@ -23,7 +27,7 @@ def _topk(scores, K=40):
     topk_ys   = (topk_inds / width).int().float()
     topk_xs   = (topk_inds % width).int().float()
     return topk_scores, topk_inds, topk_clses, topk_ys, topk_xs
-'''
+"""
 
 
 def _topk(scores, top_K):
@@ -81,7 +85,11 @@ def mvdet_decode(scoremap, offset=None, reduce=4):
     B, C, H, W = scoremap.shape
     # scoremap = _nms(scoremap)
 
-    xy = torch.nonzero(torch.ones_like(scoremap[:, 0])).view([B, H * W, 3])[:, :, [2, 1]].float()
+    xy = (
+        torch.nonzero(torch.ones_like(scoremap[:, 0]))
+        .view([B, H * W, 3])[:, :, [2, 1]]
+        .float()
+    )
     if offset is not None:
         offset = offset.permute(0, 2, 3, 1).reshape(B, H * W, 2)
         xy = xy + offset

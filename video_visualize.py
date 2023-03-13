@@ -1,35 +1,46 @@
 import os
 
-os.environ['OMP_NUM_THREADS'] = '1'
-from PIL import Image, ImageDraw
-import tqdm
+os.environ["OMP_NUM_THREADS"] = "1"
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torchvision.transforms as T
 import torch.nn.functional as F
-from multiview_detector.datasets import frameDataset, Wildtrack, MultiviewX
+import torchvision.transforms as T
+import tqdm
+from PIL import Image, ImageDraw
+
+from multiview_detector.datasets import MultiviewX, Wildtrack, frameDataset
 from multiview_detector.utils.image_utils import img_color_denormalize
 
 
 def _traget_transform(target, kernel):
     with torch.no_grad():
-        target = F.conv2d(target, kernel.float().to(target.device), padding=int((kernel.shape[-1] - 1) / 2))
+        target = F.conv2d(
+            target,
+            kernel.float().to(target.device),
+            padding=int((kernel.shape[-1] - 1) / 2),
+        )
     return target
 
 
-def test(dataset_name='multiviewx'):
-    if dataset_name == 'retail':
-        result_fpath = '/workspace/MVDeTr_research/logs/Retail/~~/test.txt'
-    elif dataset_name == 'multiviewx':
-        result_fpath = '/workspace/MVDeTr_research/logs/multiviewx/~~/test.txt'
-        dataset = frameDataset(MultiviewX(os.path.expanduser('~/Data/MultiviewX')), False, )
-    elif dataset_name == 'wildtrack':
-        result_fpath = '/workspace/MVDeTr_research/logs/wildtrack/~~/test.txt'
-        dataset = frameDataset(Wildtrack(os.path.expanduser('~/Data/Wildtrack')), False, )
+def test(dataset_name="multiviewx"):
+    if dataset_name == "retail":
+        result_fpath = "/workspace/MVDeTr_research/logs/Retail/~~/test.txt"
+    elif dataset_name == "multiviewx":
+        result_fpath = "/workspace/MVDeTr_research/logs/multiviewx/~~/test.txt"
+        dataset = frameDataset(
+            MultiviewX(os.path.expanduser("~/Data/MultiviewX")),
+            False,
+        )
+    elif dataset_name == "wildtrack":
+        result_fpath = "/workspace/MVDeTr_research/logs/wildtrack/~~/test.txt"
+        dataset = frameDataset(
+            Wildtrack(os.path.expanduser("~/Data/Wildtrack")),
+            False,
+        )
     else:
-        raise Exception('must choose from [retail, wildtrack, multiviewx]')
+        raise Exception("must choose from [retail, wildtrack, multiviewx]")
     grid_size = list(map(lambda x: x * 3, dataset.Rworld_shape))
     bbox_by_pos_cam = dataset.base.read_pom()
     results = np.loadtxt(result_fpath)
@@ -68,7 +79,7 @@ def test(dataset_name='multiviewx'):
         # gt_posID = dataset.base.get_pos_from_worldgrid(gt_map_grid.transpose())
 
         for cam in range(dataset.num_cam):
-            img = (imgs[cam].cpu().numpy().transpose([1, 2, 0]) * 255).astype('uint8')
+            img = (imgs[cam].cpu().numpy().transpose([1, 2, 0]) * 255).astype("uint8")
             img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
             for posID in res_posID:
@@ -78,7 +89,7 @@ def test(dataset_name='multiviewx'):
                     cv2.rectangle(img, tuple(bbox[:2]), tuple(bbox[2:]), (0, 255, 0), 2)
             pass
 
-            cv2.imwrite(f'imgs/cam{cam + 1}.png', img)
+            cv2.imwrite(f"imgs/cam{cam + 1}.png", img)
             # img = cv2.putText(img, f'Camera {cam + 1}', (0, 25), cv2.FONT_HERSHEY_SIMPLEX,
             #                   1, (87, 59, 233), 2, cv2.LINE_AA)
             # i, j = cam // 3, cam % 3
@@ -91,6 +102,6 @@ def test(dataset_name='multiviewx'):
     # video.release()
 
 
-if __name__ == '__main__':
-    test('multiviewx')
+if __name__ == "__main__":
+    test("multiviewx")
     # test('wildtrack')

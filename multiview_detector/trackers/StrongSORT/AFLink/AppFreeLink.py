@@ -5,29 +5,34 @@
 @Time: 2021/12/28 19:55
 @Discription: Appearance-Free Post Link
 """
-import os
 import glob
-import torch
-import numpy as np
-from os.path import join, exists
+import os
 from collections import defaultdict
-from sklearn.preprocessing import normalize
-from scipy.optimize import linear_sum_assignment
+from os.path import exists, join
+
 import AFLink.config as cfg
-from AFLink.train import train
+import numpy as np
+import torch
 from AFLink.dataset import LinkData
 from AFLink.model import PostLinker
+from AFLink.train import train
+from scipy.optimize import linear_sum_assignment
+from sklearn.preprocessing import normalize
+
 INFINITY = 1e5
 
+
 class AFLink:
-    def __init__(self, path_in, path_out, model, dataset, thrT: tuple, thrS: int, thrP: float):
-        self.thrP = thrP          # 预测阈值
-        self.thrT = thrT          # 时域阈值
-        self.thrS = thrS          # 空域阈值
-        self.model = model        # 预测模型
-        self.dataset = dataset    # 数据集类
+    def __init__(
+        self, path_in, path_out, model, dataset, thrT: tuple, thrS: int, thrP: float
+    ):
+        self.thrP = thrP  # 预测阈值
+        self.thrT = thrT  # 时域阈值
+        self.thrS = thrS  # 空域阈值
+        self.model = model  # 预测模型
+        self.dataset = dataset  # 数据集类
         self.path_out = path_out  # 结果保存路径
-        self.track = np.loadtxt(path_in, delimiter=',')
+        self.track = np.loadtxt(path_in, delimiter=",")
         self.model.cuda()
         self.model.eval()
 
@@ -73,20 +78,24 @@ class AFLink:
         id2info = self.gather_info()
         num = len(id2info)  # 目标数量
         ids = np.array(list(id2info))  # 目标ID
-        fn_l2 = lambda x, y: np.sqrt(x ** 2 + y ** 2)  # L2距离
+        fn_l2 = lambda x, y: np.sqrt(x**2 + y**2)  # L2距离
         cost_matrix = np.ones((num, num)) * INFINITY  # 损失矩阵
-        '''计算损失矩阵'''
-        for i, id_i in enumerate(ids):      # 前一轨迹
+        """计算损失矩阵"""
+        for i, id_i in enumerate(ids):  # 前一轨迹
             for j, id_j in enumerate(ids):  # 后一轨迹
-                if id_i == id_j: continue   # 禁止自娱自乐
+                if id_i == id_j:
+                    continue  # 禁止自娱自乐
                 info_i, info_j = id2info[id_i], id2info[id_j]
                 fi, bi = info_i[-1][0], info_i[-1][1:3]
                 fj, bj = info_j[0][0], info_j[0][1:3]
-                if not self.thrT[0] <= fj - fi < self.thrT[1]: continue
-                if self.thrS < fn_l2(bi[0] - bj[0], bi[1] - bj[1]): continue
+                if not self.thrT[0] <= fj - fi < self.thrT[1]:
+                    continue
+                if self.thrS < fn_l2(bi[0] - bj[0], bi[1] - bj[1]):
+                    continue
                 cost = self.predict(info_i, info_j)
-                if cost <= self.thrP: cost_matrix[i, j] = cost
-        '''二分图最优匹配'''
+                if cost <= self.thrP:
+                    cost_matrix[i, j] = cost
+        """二分图最优匹配"""
         id2id = dict()  # 存储临时匹配结果
         ID2ID = dict()  # 存储最终匹配结果
         cost_matrix, ids_row, ids_col = self.compression(cost_matrix, ids)
@@ -100,37 +109,36 @@ class AFLink:
             else:
                 ID2ID[v] = k
         # print('  ', ID2ID.items())
-        '''结果存储'''
+        """结果存储"""
         res = self.track.copy()
         for k, v in ID2ID.items():
             res[res[:, 1] == k, 1] = v
         res = self.deduplicate(res)
-        np.savetxt(self.path_out, res, fmt='%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d')
+        np.savetxt(self.path_out, res, fmt="%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print(datetime.now())
     # dir_in = '/data/dyh/results/StrongSORT/TEST/MOT20_StrongSORT'
-    dir_in = '/data/dyh/results/StrongSORT/ABLATION/CenterTrack'
-    dir_out = dir_in + '_tmp'
+    dir_in = "/data/dyh/results/StrongSORT/ABLATION/CenterTrack"
+    dir_out = dir_in + "_tmp"
     # dir_out = '/data/dyh/results/StrongSORT/ABLATION/CenterTrack_AFLink'
-    if not exists(dir_out): os.mkdir(dir_out)
+    if not exists(dir_out):
+        os.mkdir(dir_out)
     model = PostLinker()
-    model.load_state_dict(torch.load(join(cfg.model_savedir, 'newmodel_epoch20.pth')))
-    dataset = LinkData(cfg.root_train, 'train')
-    for path_in in sorted(glob.glob(dir_in + '/*.txt')):
-        print('processing the file {}'.format(path_in))
+    model.load_state_dict(torch.load(join(cfg.model_savedir, "newmodel_epoch20.pth")))
+    dataset = LinkData(cfg.root_train, "train")
+    for path_in in sorted(glob.glob(dir_in + "/*.txt")):
+        print("processing the file {}".format(path_in))
         linker = AFLink(
             path_in=path_in,
             path_out=path_in.replace(dir_in, dir_out),
             model=model,
             dataset=dataset,
-            thrT=(-10,30),  # (0,30) or (-10,30)
+            thrT=(-10, 30),  # (0,30) or (-10,30)
             thrS=75,  # 75
             thrP=0.10,  # 0.05 or 0.10
         )
         linker.link()
     print(datetime.now())
     eval(dir_out, flag=0)
-
-

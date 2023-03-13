@@ -8,6 +8,7 @@
 import torch
 from torch import nn
 
+
 class TemporalBlock(nn.Module):
     def __init__(self, cin, cout):
         super(TemporalBlock, self).__init__()
@@ -47,9 +48,9 @@ class FusionBlock(nn.Module):
 class Classifier(nn.Module):
     def __init__(self, cin):
         super(Classifier, self).__init__()
-        self.fc1 = nn.Linear(cin*2, cin//2)
+        self.fc1 = nn.Linear(cin * 2, cin // 2)
         self.relu = nn.ReLU(inplace=True)
-        self.fc2 = nn.Linear(cin//2, 2)
+        self.fc2 = nn.Linear(cin // 2, 2)
 
     def forward(self, x1, x2):
         x = torch.cat((x1, x2), dim=1)
@@ -66,13 +67,13 @@ class PostLinker(nn.Module):
             TemporalBlock(1, 32),
             TemporalBlock(32, 64),
             TemporalBlock(64, 128),
-            TemporalBlock(128, 256)
+            TemporalBlock(128, 256),
         )
         self.TemporalModule_2 = nn.Sequential(
             TemporalBlock(1, 32),
             TemporalBlock(32, 64),
             TemporalBlock(64, 128),
-            TemporalBlock(128, 256)
+            TemporalBlock(128, 256),
         )
         self.FusionBlock_1 = FusionBlock(256, 256)
         self.FusionBlock_2 = FusionBlock(256, 256)
@@ -94,7 +95,7 @@ class PostLinker(nn.Module):
         return y
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     x1 = torch.ones((2, 1, 30, 3))
     x2 = torch.ones((2, 1, 30, 3))
     m = PostLinker()

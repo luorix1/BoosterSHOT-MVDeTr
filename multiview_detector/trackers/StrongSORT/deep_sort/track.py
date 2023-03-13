@@ -3,6 +3,7 @@ import numpy as np
 from deep_sort.kalman_filter import KalmanFilter
 from opts import opt
 
+
 class TrackState:
     """
     Enumeration type for the single target track state. Newly created tracks are
@@ -65,8 +66,7 @@ class Track:
 
     """
 
-    def __init__(self, detection, track_id, n_init, max_age,
-                 feature=None, score=None):
+    def __init__(self, detection, track_id, n_init, max_age, feature=None, score=None):
         self.track_id = track_id
         self.hits = 1
         self.age = 1
@@ -88,7 +88,6 @@ class Track:
         self.kf = KalmanFilter()
 
         self.mean, self.covariance = self.kf.initiate(detection)
-
 
     def to_tlwh(self):
         """Get current position in bounding box format `(top left x, top left y,
@@ -159,11 +158,15 @@ class Track:
             The associated detection.
 
         """
-        self.mean, self.covariance = self.kf.update(self.mean, self.covariance, detection.to_xyah(), detection.confidence)
+        self.mean, self.covariance = self.kf.update(
+            self.mean, self.covariance, detection.to_xyah(), detection.confidence
+        )
 
         feature = detection.feature / np.linalg.norm(detection.feature)
         if opt.EMA:
-            smooth_feat = opt.EMA_alpha * self.features[-1] + (1 - opt.EMA_alpha) * feature
+            smooth_feat = (
+                opt.EMA_alpha * self.features[-1] + (1 - opt.EMA_alpha) * feature
+            )
             smooth_feat /= np.linalg.norm(smooth_feat)
             self.features = [smooth_feat]
         else:
@@ -175,16 +178,14 @@ class Track:
             self.state = TrackState.Confirmed
 
     def mark_missed(self):
-        """Mark this track as missed (no association at the current time step).
-        """
+        """Mark this track as missed (no association at the current time step)."""
         if self.state == TrackState.Tentative:
             self.state = TrackState.Deleted
         elif self.time_since_update > self._max_age:
             self.state = TrackState.Deleted
 
     def is_tentative(self):
-        """Returns True if this track is tentative (unconfirmed).
-        """
+        """Returns True if this track is tentative (unconfirmed)."""
         return self.state == TrackState.Tentative
 
     def is_confirmed(self):

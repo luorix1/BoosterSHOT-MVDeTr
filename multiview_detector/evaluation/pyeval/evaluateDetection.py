@@ -1,5 +1,6 @@
 ### python version of matlab evaluation toolkit
 import numpy as np
+
 from multiview_detector.evaluation.pyeval.CLEAR_MOD_HUN import CLEAR_MOD_HUN
 
 
@@ -100,5 +101,9 @@ if __name__ == "__main__":
     res_fpath = "../test-demo.txt"
     gt_fpath = "../gt-demo.txt"
     dataset_name = "Wildtrack"
-    recall, precision, moda, modp = evaluateDetection_py(res_fpath, gt_fpath, dataset_name)
-    print(f'python eval: MODA {moda:.1f}, MODP {modp:.1f}, prec {precision:.1f}, rcll {recall:.1f}')
+    recall, precision, moda, modp = evaluateDetection_py(
+        res_fpath, gt_fpath, dataset_name
+    )
+    print(
+        f"python eval: MODA {moda:.1f}, MODP {modp:.1f}, prec {precision:.1f}, rcll {recall:.1f}"
+    )

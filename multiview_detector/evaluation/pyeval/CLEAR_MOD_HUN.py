@@ -1,6 +1,7 @@
+import math
+
 import numpy as np
 from scipy.optimize import linear_sum_assignment
-import math
 
 
 def getDistance(x1, y1, x2, y2):
@@ -74,7 +75,7 @@ def CLEAR_MOD_HUN(gt, det):
                 u, v = HUN_res[HUN_res[:, 1].argsort()].T
                 for mmm in range(1, len(u) + 1):
                     M[t - 1, u[mmm - 1]] = v[mmm - 1] + 1
-        curdetected, = np.where(M[t - 1, :])
+        (curdetected,) = np.where(M[t - 1, :])
 
         c[0][t - 1] = curdetected.shape[0]
         for ct in curdetected:
@@ -90,11 +91,21 @@ def CLEAR_MOD_HUN(gt, det):
         fp[0][t - 1] = Nt - c[0][t - 1]
         m[0][t - 1] = g[0][t - 1] - c[0][t - 1]
 
-    MODP = sum(1 - distances[distances < td] / td) / np.sum(c) * 100 if sum(
-        1 - distances[distances < td] / td) / np.sum(c) * 100 > 0 else 0
-    MODA = (1 - ((np.sum(m) + np.sum(fp)) / np.sum(g))) * 100 if (1 - (
-            (np.sum(m) + np.sum(fp)) / np.sum(g))) * 100 > 0 else 0
+    MODP = (
+        sum(1 - distances[distances < td] / td) / np.sum(c) * 100
+        if sum(1 - distances[distances < td] / td) / np.sum(c) * 100 > 0
+        else 0
+    )
+    MODA = (
+        (1 - ((np.sum(m) + np.sum(fp)) / np.sum(g))) * 100
+        if (1 - ((np.sum(m) + np.sum(fp)) / np.sum(g))) * 100 > 0
+        else 0
+    )
     recall = np.sum(c) / np.sum(g) * 100 if np.sum(c) / np.sum(g) * 100 > 0 else 0
-    precision = np.sum(c) / (np.sum(fp) + np.sum(c)) * 100 if np.sum(c) / (np.sum(fp) + np.sum(c)) * 100 > 0 else 0
+    precision = (
+        np.sum(c) / (np.sum(fp) + np.sum(c)) * 100
+        if np.sum(c) / (np.sum(fp) + np.sum(c)) * 100 > 0
+        else 0
+    )
 
     return recall, precision, MODA, MODP

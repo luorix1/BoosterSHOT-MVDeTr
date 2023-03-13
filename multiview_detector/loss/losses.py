@@ -4,29 +4,29 @@
 # Copyright (c) 2018, University of Michigan
 # Licensed under the BSD 3-Clause License
 # ------------------------------------------------------------------------------
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
 import torch
 import torch.nn as nn
-from multiview_detector.utils.tensor_utils import _transpose_and_gather_feat, _sigmoid
 import torch.nn.functional as F
+
+from multiview_detector.utils.tensor_utils import (_sigmoid,
+                                                   _transpose_and_gather_feat)
 
 
 class FocalLoss(nn.Module):
-    '''nn.Module warpper for focal loss'''
+    """nn.Module warpper for focal loss"""
 
     def __init__(self):
         super(FocalLoss, self).__init__()
 
     def forward(self, output, target, mask=None):
-        ''' Modified focal loss. Exactly the same as CornerNet.
-            Runs faster and costs a little bit more memory
-          Arguments:
-            output (batch x c x h x w)
-            target (batch x c x h x w)
-        '''
+        """Modified focal loss. Exactly the same as CornerNet.
+          Runs faster and costs a little bit more memory
+        Arguments:
+          output (batch x c x h x w)
+          target (batch x c x h x w)
+        """
         if mask is None:
             mask = torch.ones_like(target)
         output = _sigmoid(output)
@@ -56,10 +56,14 @@ class RegL1Loss(nn.Module):
         super(RegL1Loss, self).__init__()
 
     def forward(self, output, mask, ind, target):
-        mask, ind, target = mask.to(output.device), ind.to(output.device), target.to(output.device)
+        mask, ind, target = (
+            mask.to(output.device),
+            ind.to(output.device),
+            target.to(output.device),
+        )
         pred = _transpose_and_gather_feat(output, ind)
         mask = mask.unsqueeze(2).expand_as(pred).float()
-        loss = F.l1_loss(pred * mask, target * mask, reduction='sum')
+        loss = F.l1_loss(pred * mask, target * mask, reduction="sum")
         loss = loss / (mask.sum() + 1e-4)
         return loss
 
@@ -69,10 +73,14 @@ class RegCELoss(nn.Module):
         super(RegCELoss, self).__init__()
 
     def forward(self, output, mask, ind, target):
-        mask, ind, target = mask.to(output.device), ind.to(output.device), target.to(output.device)
+        mask, ind, target = (
+            mask.to(output.device),
+            ind.to(output.device),
+            target.to(output.device),
+        )
         pred = _transpose_and_gather_feat(output, ind)
         if len(target[mask]) != 0:
-            loss = F.cross_entropy(pred[mask], target[mask], reduction='sum')
+            loss = F.cross_entropy(pred[mask], target[mask], reduction="sum")
             loss = loss / (mask.sum() + 1e-4)
         else:
             loss = 0

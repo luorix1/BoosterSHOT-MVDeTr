@@ -7,20 +7,21 @@
 """
 import warnings
 from os.path import join
-warnings.filterwarnings("ignore")
-from opts import opt
-from deep_sort_app import run
-from AFLink.AppFreeLink import *
-from GSI import GSInterpolation
 
-if __name__ == '__main__':
+warnings.filterwarnings("ignore")
+from AFLink.AppFreeLink import *
+from deep_sort_app import run
+from GSI import GSInterpolation
+from opts import opt
+
+if __name__ == "__main__":
     if opt.AFLink:
         model = PostLinker()
         model.load_state_dict(torch.load(opt.path_AFLink))
-        dataset = LinkData('', '')
+        dataset = LinkData("", "")
     for i, seq in enumerate(opt.sequences, start=1):
-        print('processing the {}th video {}...'.format(i, seq))
-        path_save = join(opt.dir_save, seq + '.txt')
+        print("processing the {}th video {}...".format(i, seq))
+        path_save = join(opt.dir_save, seq + ".txt")
         run(
             sequence_dir=opt.dir_dataset,
             detection_file=opt.res_fpath,
@@ -31,7 +32,7 @@ if __name__ == '__main__':
             min_detection_height=opt.min_detection_height,
             max_cosine_distance=opt.max_cosine_distance,
             nn_budget=opt.nn_budget,
-            display=False
+            display=False,
         )
         if opt.AFLink:
             linker = AFLink(
@@ -41,17 +42,8 @@ if __name__ == '__main__':
                 dataset=dataset,
                 thrT=(0, 30),  # (-10, 30) for CenterTrack, FairMOT, TransTrack.
                 thrS=75,
-                thrP=0.05  # 0.10 for CenterTrack, FairMOT, TransTrack.
+                thrP=0.05,  # 0.10 for CenterTrack, FairMOT, TransTrack.
             )
             linker.link()
         if opt.GSI:
-            GSInterpolation(
-                path_in=path_save,
-                path_out=path_save,
-                interval=20,
-                tau=10
-            )
-
-
-
-
+            GSInterpolation(path_in=path_save, path_out=path_save, interval=20, tau=10)

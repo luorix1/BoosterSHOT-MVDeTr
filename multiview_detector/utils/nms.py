@@ -16,7 +16,9 @@ def nms(points, scores, dist_thres=50 / 2.5, top_k=50):
         The indices of the kept boxes with respect to num_priors.
     """
 
-    assert points.shape[0] == scores.shape[0], 'make sure same points and scores have the same size'
+    assert (
+        points.shape[0] == scores.shape[0]
+    ), "make sure same points and scores have the same size"
     keep = torch.zeros_like(scores).long()
     if points.numel() == 0:
         return keep, 0
@@ -38,7 +40,9 @@ def nms(points, scores, dist_thres=50 / 2.5, top_k=50):
         target_point = points[idx, :]
         # load bboxes of next highest vals
         remaining_points = points[indices, :]
-        dists = torch.norm(target_point - remaining_points, dim=1)  # store result in distances
+        dists = torch.norm(
+            target_point - remaining_points, dim=1
+        )  # store result in distances
         # keep only elements with an dists > dist_thres
         indices = indices[dists > dist_thres]
     return keep, count
